@@ -49,6 +49,30 @@ def test_small_counts_are_allowed():
     assert unverified_numbers("Three features, 2 of them strong.", {}) == []
 
 
+def test_gemini_picks_newest_stable_flash_model():
+    from app.ai.providers.gemini_provider import pick_model
+
+    models = [
+        {"name": "models/gemini-2.0-flash", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-2.5-flash-lite", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-3.0-flash-preview", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-2.5-pro", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/text-embedding-004", "supportedGenerationMethods": ["embedContent"]},
+    ]
+    assert pick_model(models) == "gemini-2.5-flash"
+    assert pick_model([{"name": "models/gemini-9-flash-preview", "supportedGenerationMethods": ["generateContent"]}]) == "gemini-9-flash-preview"
+    assert pick_model([]) is None
+
+
+def test_gemini_without_key_is_disabled(monkeypatch):
+    from app.ai.providers.gemini_provider import GeminiProvider
+
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    with pytest.raises(ProviderError):
+        GeminiProvider(model=None)
+
+
 # ----------------------------------------------------------------- service
 
 

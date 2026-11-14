@@ -207,7 +207,7 @@ Set **one** API key as an environment variable. Locally, set it in the terminal 
 |---|---|---|
 | Claude (Anthropic) | `ANTHROPIC_API_KEY` | default `claude-opus-5-5`; set `EARTH2MOON_AI_MODEL=claude-haiku-5-5` for a much cheaper model |
 | OpenAI | `OPENAI_API_KEY` | **required:** `EARTH2MOON_AI_MODEL=<current OpenAI model name>` |
-| Gemini (Google AI Studio) | `GEMINI_API_KEY` | **required:** `EARTH2MOON_AI_MODEL=<current Gemini model name>` |
+| Gemini (Google AI Studio, free tier) | `GEMINI_API_KEY` | optional: by default the newest stable *Flash* model available to the key is picked automatically |
 
 If several keys are set, pick one with `EARTH2MOON_AI_PROVIDER=anthropic|openai|gemini`, or switch the feature off with `none`.
 
