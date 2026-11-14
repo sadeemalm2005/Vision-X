@@ -1,0 +1,11 @@
+# Render Blueprint: one free web service running the Docker image (site + API).
+services:
+  - type: web
+    name: earth2moon
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: EARTH2MOON_DATA_PROVIDER
+        value: demo

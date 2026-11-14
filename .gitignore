@@ -1,0 +1,18 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Env / local
+.env
+.env.local
+*.log
+.DS_Store
+
+# Real datasets are large; keep them out of git unless agreed otherwise
+backend/data/
