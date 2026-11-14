@@ -20,6 +20,9 @@ export interface HeatCell {
   bounds: [[number, number], [number, number]]
   score: number | null
   rank: number
+  /** Overrides the score colour (e.g. terrain-cluster view). */
+  color?: string
+  label?: string
 }
 
 export interface DemOverlay {
@@ -124,15 +127,16 @@ export function EarthMap({
             key={c.id}
             bounds={c.bounds}
             pathOptions={{
-              color: c.id === selectedId ? '#F3F6FA' : scoreColor(c.score),
+              color: c.id === selectedId ? '#F3F6FA' : (c.color ?? scoreColor(c.score)),
               weight: c.id === selectedId ? 2 : 0,
-              fillColor: scoreColor(c.score),
-              fillOpacity: c.score === null ? 0.08 : 0.12 + (c.score / 100) * 0.5,
+              fillColor: c.color ?? scoreColor(c.score),
+              fillOpacity: c.color ? 0.42 : c.score === null ? 0.08 : 0.12 + (c.score / 100) * 0.5,
             }}
             eventHandlers={{ click: () => onSelect?.(c.id) }}
           >
             <Tooltip sticky opacity={1}>
               #{c.rank} · {c.score === null ? 'score withheld' : `${c.score.toFixed(0)} / 100`}
+              {c.label ? ` · ${c.label}` : ''}
             </Tooltip>
           </Rectangle>
         ))}

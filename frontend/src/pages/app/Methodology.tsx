@@ -220,6 +220,31 @@ export default function Methodology() {
         </Panel>
       </div>
 
+      {/* machine learning */}
+      <Panel>
+        <PanelHeader eyebrow="Machine learning" title="Two independent ML methods alongside the weighted score" />
+        <div className="grid gap-px bg-line md:grid-cols-2">
+          <div className="flex flex-col gap-2 bg-surface p-5 text-[13.5px] leading-relaxed text-muted">
+            <p className="font-display text-[16px] font-semibold text-ink">K-means terrain clustering</p>
+            <p>
+              Every analysis window at a given scale (planetary targets and all Earth windows) is described by its feature vector. Relief is
+              log-transformed, features are standardized, and K-means groups the windows into terrain types. The number of clusters is chosen
+              automatically by the silhouette score (k = 3 to 8). Fitted offline with scikit-learn.
+            </p>
+            <p className="text-[12.5px] text-faint">Clusters describe terrain type, not suitability. Names (e.g. &ldquo;Steep slopes, high relief&rdquo;) are relative to each scale.</p>
+          </div>
+          <div className="flex flex-col gap-2 bg-surface p-5 text-[13.5px] leading-relaxed text-muted">
+            <p className="font-display text-[16px] font-semibold text-ink">Nearest-neighbour search and agreement</p>
+            <p>
+              For each analysis, Earth windows are ranked by Euclidean distance to the target in the same standardized space, over the selected
+              features with equal weights. This ranking is compared with the mission-weighted score: the overlap of the two top-10 lists and the
+              Spearman rank correlation across all windows are reported with every result.
+            </p>
+            <p className="text-[12.5px] text-faint">Both methods are unsupervised. No model is trained on labelled analog sites, because no defensible labelled set exists yet (proposal §8.3).</p>
+          </div>
+        </div>
+      </Panel>
+
       {/* integration */}
       <Panel>
         <PanelHeader eyebrow="Integration" title="How data enters the platform" />

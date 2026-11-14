@@ -1,4 +1,5 @@
-import { ArrowLeft, CheckCircle2, Printer } from 'lucide-react'
+import { ArrowLeft, BrainCircuit, CheckCircle2, Printer } from 'lucide-react'
+import { clusterColor } from '../../components/results/MLPanel'
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { computeAxisMax, ContributionBreakdown, ElevationProfile, FingerprintRadar, MeasurementTable, SlopeDistribution } from '../../components/charts/Charts'
@@ -140,6 +141,20 @@ export default function SiteReport() {
               <p className="text-[13.5px] text-muted">No compared feature reaches a strong similarity (≥ 0.75). The location is a weak analog for this target and mission.</p>
             )}
             <CoverageExplainer coverage={result.coverage} lower={result.lower_bound} upper={result.upper_bound} score={result.score} />
+            {result.ml && analysis.ml?.available && (
+              <div className="rounded-xl border border-accent/20 bg-accent/[0.04] p-3.5 text-[12.5px] leading-relaxed text-muted">
+                <p className="eyebrow mb-1.5 flex items-center gap-1.5 text-accent"><BrainCircuit aria-hidden className="size-3.5" /> Machine-learning view</p>
+                <p>
+                  K-means places this window in{' '}
+                  <span className="font-medium" style={{ color: clusterColor(result.ml.cluster) }}>{result.ml.cluster_label}</span>
+                  {result.ml.same_cluster_as_target ? ', the same terrain cluster as the target.' : `, a different cluster from the target (${analysis.ml.clustering?.target_cluster_label}).`}
+                </p>
+                <p className="mt-1">
+                  Nearest-neighbour search ranks it <span className="text-ink">#{result.ml.knn_rank}</span> of {analysis.search.patches_total} (distance{' '}
+                  <span className="num">{result.ml.knn_distance?.toFixed(2)}</span>) versus <span className="text-ink">#{result.rank}</span> by weighted score.
+                </p>
+              </div>
+            )}
           </div>
         </Panel>
         <Panel>

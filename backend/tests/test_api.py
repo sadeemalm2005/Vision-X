@@ -127,6 +127,36 @@ def test_terrain_summary_and_map_layers():
     assert layers["moon_overview"]["src"].endswith(".png")
 
 
+def test_ml_cross_check_is_returned_and_consistent():
+    data = analyze().json()
+    ml = data["ml"]
+    assert ml["available"]
+    assert set(ml["features_used"]) == set(DEM_FEATURES)
+    cl = ml["clustering"]
+    assert cl["k"] >= 3 and 0 < cl["silhouette"] <= 1
+    assert cl["target_cluster"] is not None and cl["target_cluster_label"]
+    knn = ml["knn"]["top"]
+    assert [x["knn_rank"] for x in knn] == list(range(1, len(knn) + 1))
+    assert [x["distance"] for x in knn] == sorted(x["distance"] for x in knn)
+    ag = ml["agreement"]
+    assert 0 <= ag["top_overlap"] <= ag["top_n"]
+    assert -1 <= ag["spearman"] <= 1
+    # every result and heatmap cell carries its ML annotations
+    assert all(r["ml"]["knn_rank"] and r["ml"]["cluster_label"] for r in data["results"])
+    assert all(c["cluster"] is not None and c["knn_rank"] for c in data["search"]["all"])
+
+
+def test_knn_uses_only_selected_features():
+    ml = analyze(features=["slope", "elevation_relief"]).json()["ml"]
+    assert ml["features_used"] == ["elevation_relief", "slope"]
+    assert analyze(mission_id="crater_navigation", features=["crater_morphology", "slope"]).json()["ml"]["features_used"] == ["slope"]
+
+
+def test_mars_ml_model_excludes_roughness():
+    ml = analyze(body="mars", target_id="mars_meridiani", features=["slope", "elevation_relief", "terrain_variability"]).json()["ml"]
+    assert "roughness" not in ml["clustering"]["features"]
+
+
 def test_sites_catalogue_reports_data_status():
     sites = {s["id"]: s for s in client.get("/api/sites").json()}
     assert sites["atacama"]["data_status"] == "real"

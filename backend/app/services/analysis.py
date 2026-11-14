@@ -12,10 +12,13 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
 
+import numpy as np
+
 from ..engine.bodies import DISCLAIMER, environmental_differences
 from ..engine.explain import explain
 from ..engine.features import FEATURES
 from ..engine.missions import get_mission
+from ..engine.ml import knn_distances, spearman, standardize, top_overlap, vector
 from ..engine.similarity import MIN_COVERAGE, compare_feature, rank_key, resolve_weights, score_candidate
 from ..providers.base import DataProvider, TargetRegion
 from .serializers import patch_dict, target_dict
@@ -62,6 +65,82 @@ def feature_availability(provider: DataProvider, target: TargetRegion) -> list[d
     return out
 
 
+def ml_cross_check(model: dict | None, target: TargetRegion, ranked_patches: list, selected: list[str], top_n: int) -> dict:
+    """Independent machine-learning view of the same comparison.
+
+    1. K-means terrain cluster of the target and of every Earth window (fitted offline).
+    2. k-nearest-neighbour search in the standardized feature space over the
+       selected features, with equal weights (independent of mission weights).
+    3. Agreement between the kNN ranking and the weighted-score ranking.
+    """
+    if model is None:
+        return {"available": False, "reason": "No machine-learning model has been built for this scale."}
+    feats = [f for f in model["features"] if f in selected]
+    if not feats:
+        return {"available": False, "reason": "None of the selected features is used by the terrain model."}
+    idx = [model["features"].index(f) for f in feats]
+    mean = np.array(model["scaler"]["mean"])[idx]
+    scale = np.array(model["scaler"]["scale"])[idx]
+    logs = set(model["log_features"])
+
+    tv = vector(target.measurements, feats, logs)
+    rows = [(p, vector(p.measurements, feats, logs)) for p in ranked_patches]
+    rows = [(p, v) for p, v in rows if v is not None]
+    if tv is None or not rows:
+        return {"available": False, "reason": "Missing measurements for nearest-neighbour search."}
+
+    Z = standardize(np.array([v for _, v in rows]), mean, scale)
+    dist = knn_distances(standardize(tv, mean, scale), Z)
+    order = np.argsort(dist, kind="mergesort")
+    knn_rank = {rows[i][0].id: r + 1 for r, i in enumerate(order)}
+    score_ids = [p.id for p, _ in rows]  # already in weighted-score rank order
+    knn_ids = [rows[i][0].id for i in order]
+    rho = spearman(np.arange(len(score_ids)), np.array([knn_rank[i] for i in score_ids]))
+    n = min(top_n, len(rows))
+
+    clusters = {c["id"]: c for c in model["clusters"]}
+    tc = target.cluster
+    return {
+        "available": True,
+        "features_used": feats,
+        "clustering": {
+            "method": model["method"],
+            "k": model["k"],
+            "silhouette": model["silhouette"],
+            "silhouette_by_k": model["silhouette_by_k"],
+            "n_samples": model["n_samples"],
+            "features": model["features"],
+            "clusters": model["clusters"],
+            "target_cluster": tc,
+            "target_cluster_label": clusters[tc]["label"] if tc is not None else None,
+            "earth_windows_in_target_cluster": clusters[tc]["earth_windows"] if tc is not None else 0,
+        },
+        "knn": {
+            "method": "k-nearest neighbours, Euclidean distance on standardized features, equal weights",
+            "top": [
+                {
+                    "id": rows[i][0].id,
+                    "name": rows[i][0].name,
+                    "lat": rows[i][0].lat,
+                    "lon": rows[i][0].lon,
+                    "distance": round(float(dist[i]), 3),
+                    "knn_rank": r + 1,
+                    "score_rank": score_ids.index(rows[i][0].id) + 1,
+                    "cluster": rows[i][0].cluster,
+                }
+                for r, i in enumerate(order[:n])
+            ],
+            "ranks": knn_rank,
+            "distances": {rows[i][0].id: round(float(dist[i]), 3) for i in range(len(rows))},
+        },
+        "agreement": {
+            "top_n": n,
+            "top_overlap": top_overlap(score_ids, knn_ids, n),
+            "spearman": None if rho is None else round(rho, 3),
+        },
+    }
+
+
 def run_analysis(
     provider: DataProvider,
     *,
@@ -91,6 +170,11 @@ def run_analysis(
     scored = [(p, score_candidate(norm, target.measurements, p.measurements, required=mission.required)) for p in patches]
     scored.sort(key=lambda pair: rank_key(pair[1]))
 
+    ml = ml_cross_check(provider.ml_model(target.scale_profile), target, [p for p, _ in scored], list(norm), top_n)
+    ml_ranks = ml.get("knn", {}).pop("ranks", {}) if ml["available"] else {}
+    ml_dist = ml.get("knn", {}).pop("distances", {}) if ml["available"] else {}
+    cluster_labels = {c["id"]: c["label"] for c in ml["clustering"]["clusters"]} if ml["available"] else {}
+
     results = []
     for rank, (p, res) in enumerate(scored[:top_n], start=1):
         site = provider.get_site(p.site_id)
@@ -109,6 +193,13 @@ def run_analysis(
                 "scale_limited": res.scale_limited,
                 "features": [asdict(f) for f in res.features],
                 "explanation": asdict(exp),
+                "ml": {
+                    "cluster": p.cluster,
+                    "cluster_label": cluster_labels.get(p.cluster),
+                    "same_cluster_as_target": p.cluster is not None and p.cluster == target.cluster,
+                    "knn_rank": ml_ranks.get(p.id),
+                    "knn_distance": ml_dist.get(p.id),
+                },
             }
         )
 
@@ -121,6 +212,8 @@ def run_analysis(
             "bounds": [list(p.bounds[0]), list(p.bounds[1])],
             "score": None if r.score is None else round(r.score, 1),
             "lower_bound": round(r.lower_bound, 1),
+            "cluster": p.cluster,
+            "knn_rank": ml_ranks.get(p.id),
         }
         for i, (p, r) in enumerate(scored, start=1)
     ]
@@ -146,6 +239,7 @@ def run_analysis(
             "top_n": len(results),
             "all": all_scores,
         },
+        "ml": ml,
         "datasets_used": used,
         "environmental_differences": environmental_differences(body),
         "scoring": {

@@ -226,7 +226,7 @@ function Problem() {
 const STEPS = [
   { icon: Database, title: 'Collect', text: 'Integrate NASA planetary datasets and Earth geographic information, recording source and resolution.' },
   { icon: ScanSearch, title: 'Analyze', text: 'Extract elevation, slope, roughness, crater morphology and other features the data can support.' },
-  { icon: GitCompareArrows, title: 'Match', text: 'Calculate feature-level similarity, apply mission weights and rank candidate Earth locations.' },
+  { icon: GitCompareArrows, title: 'Match', text: 'Score every Earth window with mission-weighted similarity, then cross-check with K-means clustering and nearest-neighbour search.' },
   { icon: MapIcon, title: 'Explore', text: 'Inspect ranked sites on a map, compare terrain characteristics and read the limitations.' },
 ]
 

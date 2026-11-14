@@ -56,6 +56,7 @@ class TargetRegion:
     image: dict
     measurements: dict[str, Measurement] = field(default_factory=dict)
     data_status: str = "real"
+    cluster: int | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,7 @@ class EarthPatch:
     bounds: tuple[tuple[float, float], tuple[float, float]]
     image_box: tuple[float, float, float, float]
     measurements: dict[str, Measurement] = field(default_factory=dict)
+    cluster: int | None = None
 
 
 @dataclass(frozen=True)
@@ -127,3 +129,4 @@ class DataProvider(Protocol):
     def list_patches(self, scale_profile: str) -> list[EarthPatch]: ...
     def get_terrain_summary(self, entity_id: str) -> TerrainSummary | None: ...
     def map_layers(self) -> dict: ...
+    def ml_model(self, scale_profile: str) -> dict | None: ...

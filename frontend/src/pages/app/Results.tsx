@@ -1,11 +1,12 @@
 import clsx from 'clsx'
-import { ArrowRight, Columns2, Compass, FileText, ListOrdered, Map as MapIcon, SlidersHorizontal } from 'lucide-react'
+import { ArrowRight, Columns2, Compass, FileText, ListOrdered, Map as MapIcon, Network, SlidersHorizontal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { RankingRanges } from '../../components/charts/Charts'
 import { EarthMap } from '../../components/map/EarthMap'
 import { PatchTerrain } from '../../components/TerrainImage'
 import { PlanetMap } from '../../components/map/PlanetMap'
+import { ClusterLegend, clusterColor, MLPanel } from '../../components/results/MLPanel'
 import { ConfidenceBadge, Disclaimer, ScoreDial } from '../../components/results/ResultParts'
 import { SaveButton } from '../../components/results/SaveButton'
 import { Badge, ButtonLink, DemoBadge, EmptyState, Panel, PanelHeader, Term } from '../../components/ui'
@@ -62,6 +63,7 @@ export default function Results() {
   const layers = useApi('mapLayers', api.mapLayers)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [split, setSplit] = useState(false)
+  const [clusterView, setClusterView] = useState(false)
   const selectIfDetailed = (id: string) => {
     if (analysis?.results.some((r) => r.site.id === id)) setSelectedId(id)
   }
@@ -92,6 +94,7 @@ export default function Results() {
   }
 
   const search = analysis.search
+  const clusterLabels: Record<number, string> = Object.fromEntries((analysis.ml?.clustering?.clusters ?? []).map((c) => [c.id, c.label]))
   const top = analysis.results[0]
   const scale = search.scale_profile
 
@@ -141,15 +144,28 @@ export default function Results() {
         <Panel className="overflow-hidden">
           <PanelHeader
             eyebrow="Ranked candidates"
-            title={split ? 'Planetary target vs Earth window' : 'Similarity across the Atacama tile'}
+            title={split ? 'Planetary target vs Earth window' : clusterView ? 'K-means terrain clusters across the Atacama tile' : 'Similarity across the Atacama tile'}
             action={
-              <div className="flex rounded-lg border border-line p-0.5" role="group" aria-label="Map view">
-                <button type="button" onClick={() => setSplit(false)} aria-pressed={!split} className={clsx('flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs', !split ? 'bg-raised text-ink' : 'text-muted hover:text-ink')}>
-                  <MapIcon aria-hidden className="size-3.5" /> Earth
-                </button>
-                <button type="button" onClick={() => setSplit(true)} aria-pressed={split} className={clsx('flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs', split ? 'bg-raised text-ink' : 'text-muted hover:text-ink')}>
-                  <Columns2 aria-hidden className="size-3.5" /> Split view
-                </button>
+              <div className="flex flex-wrap rounded-lg border border-line p-0.5" role="group" aria-label="Map view">
+                {([
+                  ['score', MapIcon, 'Score'],
+                  ['clusters', Network, 'Clusters'],
+                  ['split', Columns2, 'Split view'],
+                ] as const).map(([v, Icon, label]) => {
+                  const on = v === 'split' ? split : !split && (v === 'clusters') === clusterView
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      disabled={v === 'clusters' && !analysis.ml?.available}
+                      onClick={() => { setSplit(v === 'split'); if (v !== 'split') setClusterView(v === 'clusters') }}
+                      aria-pressed={on}
+                      className={clsx('flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40', on ? 'bg-raised text-ink' : 'text-muted hover:text-ink')}
+                    >
+                      <Icon aria-hidden className="size-3.5" /> {label}
+                    </button>
+                  )
+                })}
               </div>
             }
           />
@@ -164,7 +180,11 @@ export default function Results() {
               {split && <p className="eyebrow px-1 text-earth">{selected?.site.name ?? 'Earth'}</p>}
               <EarthMap
                 sites={mapSites}
-                heat={heat.map((c) => ({ id: c.id, bounds: c.bounds, score: c.score, rank: c.rank }))}
+                heat={heat.map((c) =>
+                  clusterView && !split
+                    ? { id: c.id, bounds: c.bounds, score: c.score, rank: c.rank, color: clusterColor(c.cluster), label: clusterLabels[c.cluster ?? -1] }
+                    : { id: c.id, bounds: c.bounds, score: c.score, rank: c.rank },
+                )}
                 overlays={overlays}
                 fitTo={fitAll}
                 maxFitZoom={10}
@@ -173,10 +193,16 @@ export default function Results() {
                 flyToSelection={split}
                 className="h-[340px] sm:h-[420px]"
               />
-              {!split && (
+              {!split && !clusterView && (
                 <p className="px-1 text-[11.5px] text-muted">
                   Each square is one {scale.window_m / 1000} km window, coloured by score (green ≥ 75, amber ≥ 50, red &lt; 50). Markers show the top 3; click a square from the top {search.top_n} to inspect it, or hover any square for its score.
                 </p>
+              )}
+              {!split && clusterView && analysis.ml?.available && (
+                <div className="flex flex-col gap-1.5 px-1">
+                  <ClusterLegend ml={analysis.ml} />
+                  <p className="text-[11.5px] text-faint">Unsupervised K-means groups of terrain type (k = {analysis.ml.clustering?.k}); names are relative to this scale and say nothing about suitability.</p>
+                </div>
               )}
             </div>
           </div>
@@ -228,6 +254,8 @@ export default function Results() {
         )}
       </div>
 
+      <MLPanel ml={analysis.ml} catalog={catalog.byId} onSelect={selectIfDetailed} />
+
       {/* charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel>
@@ -266,6 +294,8 @@ export default function Results() {
                     <ConfidenceBadge confidence={r.confidence} coverage={r.coverage} />
                     {r.explanation.strengths.slice(0, 3).map((s) => <Badge key={s.feature_id} tone="good">{featureName(catalog.byId, s.feature_id, true)}</Badge>)}
                     {r.explanation.differences.slice(0, 2).map((s) => <Badge key={s.feature_id} tone="bad">{featureName(catalog.byId, s.feature_id, true)}</Badge>)}
+                    {r.ml?.knn_rank && <Badge tone="accent">kNN #{r.ml.knn_rank}</Badge>}
+                    {r.ml?.same_cluster_as_target && <Badge tone="accent">Same terrain cluster</Badge>}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-2">

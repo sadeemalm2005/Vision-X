@@ -77,7 +77,7 @@ class NasaDataProvider:
             t["id"]: TargetRegion(
                 id=t["id"], body=t["body"], name=t["name"], region_type=t["region_type"], lat=t["lat"], lon=t["lon"],
                 description=t["description"], scale_profile=t["scale_profile"], window_m=t["window_m"], image=t["image"],
-                measurements=_measurements(t["measurements"]),
+                measurements=_measurements(t["measurements"]), cluster=t.get("cluster"),
             )
             for t in self._doc["targets"]
         }
@@ -95,7 +95,7 @@ class NasaDataProvider:
                     id=p["id"], name=p["name"], tile_id=p["id"].split("_")[0], site_id=self._tile_site[p["id"].split("_")[0]],
                     scale_profile=profile, lat=p["lat"], lon=p["lon"],
                     bounds=(tuple(p["bounds"][0]), tuple(p["bounds"][1])), image_box=tuple(p["image_box"]),
-                    measurements=_measurements(p["measurements"]),
+                    measurements=_measurements(p["measurements"]), cluster=p.get("cluster"),
                 )
                 for p in items
             ]
@@ -149,6 +149,9 @@ class NasaDataProvider:
             profile_distance_m=[round(i * window_m / (n - 1), 1) for i in range(n)],
             profile_elevation_m=t["transect_m"],
         )
+
+    def ml_model(self, scale_profile: str) -> dict | None:
+        return self._doc.get("ml", {}).get(scale_profile)
 
     def map_layers(self) -> dict:
         return {

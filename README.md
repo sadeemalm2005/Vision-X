@@ -40,6 +40,11 @@ Earth cannot fully reproduce the environmental conditions of the Moon or Mars. E
 - **Moon vs Earth:** LOLA 40 m against NASADEM resampled to 40 m.
 - **Mars vs Earth:** MOLA 1.85 km against NASADEM area-averaged to 1.85 km. Mars comparisons are therefore **regional**: slopes describe landforms, not rover-scale ground. Roughness is unavailable for Mars, and confidence is capped at medium.
 
+**Machine learning.** Two unsupervised methods run alongside the weighted score; no model is trained on labelled sites, because no defensible labelled set exists yet.
+- **K-means terrain clustering** (scikit-learn, offline). It groups every window at a scale (targets and Earth windows) by standardized features, with relief log-scaled. k is chosen by silhouette score: k = 3 for both scales, silhouette 0.46 (Moon scale) and 0.47 (Mars scale). Shown as a "Clusters" map layer.
+- **Nearest-neighbour search** (NumPy, at runtime). It ranks Earth windows by distance to the target in the same standardized space, with equal feature weights.
+- **Agreement.** Each analysis reports the top-10 overlap and the Spearman correlation between the two rankings. Rover-mobility tests gave ρ = 0.95–0.99 and 6–9 of 10 shared windows.
+
 **Not available yet** (shown with the reason in the app):
 - **Crater morphology:** needs a crater-detection step.
 - **Rocks:** need sub-metre imagery.
@@ -80,7 +85,7 @@ cd backend && python -m app.pipeline.build --raw data/raw/NASA-DATA    # ~10 s
 ### Tests
 
 ```bash
-cd backend  && python -m pytest          # 57 tests: terrain math, readers, scoring engine, API on real data
+cd backend  && pip install -r requirements-dev.txt && python -m pytest   # 65 tests: terrain math, readers, ML, scoring, API
 cd frontend && npx vitest run            # weight preview + polar projection
 cd frontend && npm run build             # type-check + production build
 ```
@@ -114,12 +119,14 @@ backend/                      Python · FastAPI
     features.py               feature catalog: kernels, tolerances, resolution limits
     missions.py               mission profiles: weights, required features
     similarity.py             S = 100·Σ wᵢ sᵢ, coverage, withholding, conservative ranking
+    ml.py                     nearest-neighbour search, Spearman agreement (NumPy)
     explain.py                template explanations built only from computed values
     bodies.py                 environmental differences + mandatory disclaimer
   app/pipeline/               OFFLINE DATA PROCESSING (NumPy)
     readers.py                LOLA (PDS3), MOLA MEGDR (PDS4), NASADEM (HGT) readers + projections
     terrain.py                relief, slope, roughness, variability, hillshade, resampling
     build.py                  harmonize scales, cut Earth windows, write features + PNGs
+    clustering.py             K-means terrain clusters (scikit-learn), k by silhouette
   app/providers/              DATA LAYER
     base.py                   DataProvider interface
     nasa.py                   serves the processed features

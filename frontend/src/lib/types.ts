@@ -162,6 +162,38 @@ export interface SiteResult {
   scale_limited: boolean
   features: FeatureResult[]
   explanation: Explanation
+  ml?: { cluster: number | null; cluster_label: string | null; same_cluster_as_target: boolean; knn_rank: number | null; knn_distance: number | null }
+}
+
+export interface TerrainCluster {
+  id: number
+  label: string
+  size: number
+  earth_windows: number
+  centroid: Record<string, number>
+}
+
+export interface MLCrossCheck {
+  available: boolean
+  reason?: string
+  features_used?: string[]
+  clustering?: {
+    method: string
+    k: number
+    silhouette: number
+    silhouette_by_k: Record<string, number>
+    n_samples: number
+    features: string[]
+    clusters: TerrainCluster[]
+    target_cluster: number | null
+    target_cluster_label: string | null
+    earth_windows_in_target_cluster: number
+  }
+  knn?: {
+    method: string
+    top: { id: string; name: string; lat: number; lon: number; distance: number; knn_rank: number; score_rank: number; cluster: number | null }[]
+  }
+  agreement?: { top_n: number; top_overlap: number; spearman: number | null }
 }
 
 export interface ScaleProfile {
@@ -181,6 +213,8 @@ export interface PatchScore {
   bounds: [[number, number], [number, number]]
   score: number | null
   lower_bound: number
+  cluster?: number | null
+  knn_rank?: number | null
 }
 
 export interface EnvironmentalDifference {
@@ -199,6 +233,7 @@ export interface AnalysisResult {
   weights: { feature_id: string; weight: number; default_weight: number | null }[]
   results: SiteResult[]
   search: { scale_profile: ScaleProfile; patches_total: number; patches_withheld: number; top_n: number; all: PatchScore[] }
+  ml?: MLCrossCheck
   datasets_used: string[]
   environmental_differences: EnvironmentalDifference[]
   scoring: { formula: string; min_coverage: number; rule: string }

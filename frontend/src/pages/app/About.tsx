@@ -20,13 +20,14 @@ const TECH = [
   ['Backend', 'Python 3, FastAPI, Pydantic; pure-Python similarity engine with pytest coverage'],
   ['Data pipeline', 'NumPy: reads PDS3/PDS4/HGT DEMs, harmonizes scales, computes features and hillshades'],
   ['Data layer', 'DataProvider interface serving precomputed features from LOLA, MOLA and NASADEM'],
+  ['Machine learning', 'scikit-learn K-means (offline, k by silhouette); NumPy nearest-neighbour search and rank agreement at runtime'],
   ['Persistence', 'Browser localStorage for history and saved sites (no accounts in the prototype)'],
 ]
 
 const FUTURE = [
   'Add NASADEM tiles for Death Valley, Meteor Crater and Hawaii so every candidate site can be scored.',
   'Patch-level search across wider Earth regions instead of a fixed candidate list.',
-  'Unsupervised clustering of terrain patches; supervised models only with a defensible labelled set.',
+  'Supervised models only once a defensible labelled set of analog sites exists.',
   'Crater and rock detection where image resolution and labels support it.',
   'Sensitivity, ablation and resolution testing; expert review of interpretations.',
   'Grounded natural-language summaries built strictly from calculated values and metadata.',
