@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { LoadingBlock } from './components/ui'
 import NotFound from './pages/NotFound'
+import RouteError from './pages/RouteError'
 
 const Landing = lazy(() => import('./pages/Landing'))
 const Overview = lazy(() => import('./pages/app/Overview'))
@@ -18,10 +19,11 @@ const About = lazy(() => import('./pages/app/About'))
 const page = (el: React.ReactNode) => <Suspense fallback={<LoadingBlock />}>{el}</Suspense>
 
 const router = createBrowserRouter([
-  { path: '/', element: <Suspense fallback={<div className="min-h-dvh bg-void" />}><Landing /></Suspense> },
+  { path: '/', element: <Suspense fallback={<div className="min-h-dvh bg-void" />}><Landing /></Suspense>, errorElement: <RouteError /> },
   {
     path: '/app',
     element: <AppShell />,
+    errorElement: <RouteError />,
     children: [
       { index: true, element: page(<Overview />) },
       { path: 'explore', element: page(<Explore />) },
