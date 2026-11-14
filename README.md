@@ -1,232 +1,497 @@
-# 🌍 Earth2Moon
-### AI-Powered Space Analog Site Finder
+<p align="center">
+  <img
+    src="docs/images/earth2moon-banner.png"
+    alt="Earth2Moon - AI-Powered Space Analog Site Finder"
+    width="100%"
+  />
+</p>
 
-**Find Earth. Explore Beyond.** Earth2Moon is an AI-assisted geospatial platform that ranks places on Earth by measurable terrain similarity to selected regions of the Moon and Mars, for a chosen mission objective, and explains where each match ends.
+<h1 align="center">🌍 Earth2Moon</h1>
 
-The project aims to help researchers and space enthusiasts discover potential Earth-based analog sites that can be used to test space exploration technologies before future lunar and Martian missions.
+<h3 align="center">
+  AI-Powered Space Analog Site Finder
+</h3>
 
-## 👥 Team
+<p align="center">
+  <em>Find Earth. Explore Beyond.</em>
+</p>
 
-**Team Name:** Vision-X · **Project:** Earth2Moon – AI-Powered Space Analog Site Finder
+<p align="center">
+  <strong>Find Earth. Explore Beyond.</strong>
+  <br />
+  Discover Earth's most promising terrain analogs for future Moon and Mars exploration.
+</p>
 
-- Sadeem Almohsen
-- Hayat Mohammed
-- Renad
-- Raghad
-- KM
-
-## ⚠️ Important Note
-
-Earth cannot fully reproduce the environmental conditions of the Moon or Mars. Earth2Moon compares selected terrain characteristics and identifies potential analog sites; it never claims that these locations are exact planetary equivalents.
-
-> **Status: running on real NASA elevation data.**
-> Every terrain measurement is computed by the project's pipeline from three datasets:
-> **LOLA** lunar south-pole DEM (40 m), **MOLA MEGDR** global Mars topography (1.85 km) and one **NASADEM** tile in the Atacama Desert (30 m).
-> Scores are research-discovery indicators, not validated findings: weights and tolerances are prototype values awaiting calibration.
-
-## 📦 Data in use
-
-| Body | Dataset | File | Resolution | Coverage |
-|---|---|---|---|---|
-| Moon | LRO LOLA gridded DEM (PDS Geosciences) | `ldem_85s_40m_float.img/.lbl` | 40 m | South pole, 85°S–90°S |
-| Mars | MGS MOLA MEGDR (PDS Geosciences) | `megt90n000fb.img/.xml` | 32 px/deg ≈ 1.85 km | Global |
-| Earth | NASADEM_HGT v001 (NASA Earthdata) | `s23w069.hgt` | 1″ ≈ 30 m | 23°S–22°S, 69°W–68°W (Atacama) |
-
-**Targets.** Moon: Shackleton crater interior, the south pole on Shackleton's rim, and two windows picked automatically from the DEM (lowest-slope plain, highest-relief massif). Mars: the Curiosity, Perseverance and Opportunity landing sites.
-
-**Earth search.** The Atacama tile is cut into overlapping analysis windows and every window is scored. That gives 399 windows of 10 km for lunar comparisons and 72 windows of 30 km for Mars comparisons; results appear as a heatmap.
-
-**Scale harmonization.** Each comparison runs on one shared grid:
-- **Moon vs Earth:** LOLA 40 m against NASADEM resampled to 40 m.
-- **Mars vs Earth:** MOLA 1.85 km against NASADEM area-averaged to 1.85 km. Mars comparisons are therefore **regional**: slopes describe landforms, not rover-scale ground. Roughness is unavailable for Mars, and confidence is capped at medium.
-
-**Machine learning.** Two unsupervised methods run alongside the weighted score; no model is trained on labelled sites, because no defensible labelled set exists yet.
-- **K-means terrain clustering** (scikit-learn, offline). It groups every window at a scale (targets and Earth windows) by standardized features, with relief log-scaled. k is chosen by silhouette score: k = 3 for both scales, silhouette 0.46 (Moon scale) and 0.47 (Mars scale). Shown as a "Clusters" map layer.
-- **Nearest-neighbour search** (NumPy, at runtime). It ranks Earth windows by distance to the target in the same standardized space, with equal feature weights.
-- **Agreement.** Each analysis reports the top-10 overlap and the Spearman correlation between the two rankings. Rover-mobility tests gave ρ = 0.95–0.99 and 6–9 of 10 shared windows.
-
-**AI summaries (language model).** Each site report has a **Generate AI summary** button that writes a readable paragraph from the report's numbers.
-- **Facts recomputed on the server:** client data is never trusted.
-- **Every number checked:** a summary containing any number not in the data is rejected and not shown.
-- **Saved after generation:** results are cached on the server and saved in the browser, so repeat views cost nothing.
-- **Daily limit:** a cap, 200 per day by default, protects your API budget.
-- **Providers:** Claude, OpenAI or Gemini, chosen by setting. With no key set the button is hidden and the site works as before. Setup is under [Enabling AI summaries](#enabling-ai-summaries).
-
-**Not available yet** (shown with the reason in the app):
-- **Crater morphology:** needs a crater-detection step.
-- **Rocks:** need sub-metre imagery.
-- **Geology:** needs geological maps.
-- **Regolith proxies:** need material or spectral data.
-
-Because of this, the crater-navigation and geological-research missions are locked. Death Valley, Meteor Crater, Hawaii and Iceland have no elevation tile yet, so they are not scored.
+<p align="center">
+  <img src="https://img.shields.io/badge/AI-Assisted-8B5CF6?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/NASA-Real_Data-0B6E99?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Python-FastAPI-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/React-TypeScript-3178C6?style=for-the-badge&logo=react&logoColor=white" />
+</p>
 
 ---
 
-## Quick start
+<p align="center">
+  <a href="https://vision-x-gdse.onrender.com/">
+    <strong>🚀 Live Demo</strong>
+  </a>
+</p>
 
-Requirements: Python 3.11+ and Node 20+.
+## 🚀 Overview
+
+**Earth2Moon** is an AI-assisted geospatial platform developed by **Vision-X** to identify and rank potential Earth-based analog sites that resemble selected regions of the Moon and Mars.
+
+By combining real NASA elevation datasets, terrain analysis, machine learning, and explainable similarity scoring, Earth2Moon helps researchers explore terrestrial environments that may support the testing of space exploration technologies.
+
+Rather than simply identifying similar-looking landscapes, the platform measures terrain characteristics, evaluates mission-specific requirements, and explains both the similarities and differences between locations.
+
+**Our goal:** Make planetary terrain comparison more accessible, transparent, and data-driven.
+
+## ✨ Key Features
+
+| Feature | Description |
+|---|---|
+| 🌍 Planetary Exploration | Explore selected regions of the Moon and Mars alongside Earth locations. |
+| 🛰️ NASA Data Integration | Analyze real LOLA, MOLA, and NASADEM elevation datasets. |
+| 🧠 Terrain Similarity Analysis | Rank Earth locations using mission-specific weighted terrain comparisons. |
+| 🤖 Machine Learning | Discover terrain patterns through K-means clustering and nearest-neighbor analysis. |
+| 🗺️ Interactive Maps | Visualize candidate locations, terrain distributions, and similarity heatmaps. |
+| 📊 Explainable Results | Understand why a location matches and where its terrain differs. |
+| 🎯 Mission-Based Analysis | Evaluate terrain according to selected exploration objectives. |
+| ✍️ AI-Generated Summaries | Generate readable site reports using Claude, OpenAI, or Gemini. |
+| 🔬 Scientific Transparency | Display data coverage, uncertainty, resolution limitations, and unavailable features. |
+
+## 🪐 How It Works
+
+Earth2Moon follows a five-step analysis workflow:
+
+1. **Select a Planetary Body** — Choose the Moon or Mars.
+2. **Choose a Target Region** — Select a planetary location for comparison.
+3. **Define a Mission Objective** — Choose the exploration objective.
+4. **Configure Terrain Features** — Select available features and optionally adjust their weights.
+5. **Run the Analysis** — Compare terrain measurements, rank Earth candidates, and explore the results.
+
+### Analysis Pipeline
+
+```text
+NASA Planetary Data + NASADEM
+              │
+              ▼
+       Data Processing
+              │
+              ▼
+    Terrain Feature Extraction
+              │
+              ▼
+      Scale Harmonization
+              │
+              ▼
+    ┌──────────────────────┐
+    │  Similarity Scoring  │
+    │  K-means Clustering  │
+    │  Nearest Neighbors   │
+    └──────────────────────┘
+              │
+              ▼
+     Candidate Ranking
+              │
+              ▼
+    Interactive Results
+              │
+              ▼
+       AI Site Summary
+```
+
+## 🛰️ NASA Data Sources
+
+Earth2Moon currently processes three real elevation datasets:
+
+| Planet | Dataset | Resolution | Coverage |
+|---|---|---|---|
+| 🌙 Moon | LRO LOLA Gridded DEM | 40 m | Lunar South Pole (85°S–90°S) |
+| 🔴 Mars | MGS MOLA MEGDR | ~1.85 km | Global |
+| 🌍 Earth | NASADEM_HGT v001 | ~30 m | Atacama Desert |
+
+### Current Analysis Coverage
+
+- **Moon:** Shackleton crater interior, Shackleton's rim near the South Pole, and two automatically selected terrain windows.
+- **Mars:** Curiosity, Perseverance, and Opportunity landing sites.
+- **Earth:** One NASADEM tile covering part of the Atacama Desert.
+
+The Atacama dataset is divided into overlapping analysis windows:
+
+- 399 Earth windows at a 10 km analysis scale for lunar comparisons.
+- 72 Earth windows at a 30 km analysis scale for Mars comparisons.
+
+Results are visualized through interactive maps and heatmaps.
+
+### Scale Harmonization
+
+To ensure meaningful comparisons, planetary and Earth datasets are processed on shared grids:
+
+- **Moon vs. Earth:** LOLA 40 m and NASADEM resampled to 40 m.
+- **Mars vs. Earth:** MOLA ~1.85 km and NASADEM area-averaged to the same resolution.
+
+Mars comparisons are therefore regional-scale analyses, not rover-scale terrain assessments. Roughness is unavailable at this scale, and confidence is capped at medium.
+
+## 🧠 Machine Learning & AI
+
+Earth2Moon combines weighted similarity scoring with two complementary data-driven methods:
+
+- **K-means Clustering:** An unsupervised learning method that groups terrain windows based on standardized features.
+- **Nearest-Neighbor Search:** Ranks Earth terrain windows by their feature-space distance from the selected planetary target.
+- 
+### 1. K-Means Terrain Clustering
+
+- Implemented using scikit-learn.
+- Groups planetary and Earth terrain windows according to standardized features.
+- Uses log-scaled relief measurements.
+- Automatically selects the number of clusters using silhouette scores.
+- Currently uses k = 3 for both analysis scales.
+
+| Analysis Scale | Clusters | Silhouette Score |
+|---|---:|---:|
+| Moon | 3 | 0.46 |
+| Mars | 3 | 0.47 |
+
+### 2. Nearest-Neighbor Search
+
+- Implemented using NumPy.
+- Ranks Earth terrain windows according to their feature-space distance from the selected planetary target.
+- Uses standardized terrain features with equal feature weights.
+
+### 3. Model Agreement
+
+The platform evaluates agreement between the two ranking approaches using:
+
+- Top-10 overlap.
+- Spearman rank correlation.
+
+Rover-mobility tests produced Spearman correlations of 0.95–0.99, with 6–9 shared locations among the top 10 candidates.
+
+> These are prototype evaluation results, not independent scientific validation.
+
+### 4. AI-Generated Site Summaries
+
+Each site report can include an AI-generated explanation based on its computed measurements.
+
+Supported providers:
+- Anthropic Claude
+- OpenAI
+- Google Gemini
+
+**AI reliability safeguards:**
+- Site facts are recomputed on the server.
+- Generated numerical claims are validated against the underlying report data.
+- Summaries are cached to avoid unnecessary repeated API calls.
+- A configurable daily request limit protects API usage.
+- AI summaries are optional and do not affect the core terrain analysis.
+
+## 📊 Similarity Scoring
+
+Earth2Moon uses a weighted similarity model:
+
+`S = 100 × Σ (wᵢ × sᵢ)`
+
+Where:
+- `S` represents the overall similarity score.
+- `wᵢ` represents the normalized weight of each selected feature.
+- `sᵢ` represents the similarity of that feature, ranging from 0 to 1.
+
+The scoring system includes:
+
+- Gaussian similarity kernels for numerical features.
+- Log-ratio comparison for terrain relief.
+- Resolution-aware feature eligibility.
+- Missing-data reporting and coverage calculations.
+- Conservative ranking using lower-bound scores.
+- Mission-specific feature requirements.
+
+Scores are withheld when feature coverage falls below 60% or when a mission-required feature cannot be compared.
+
+All weights, tolerances, and similarity kernels are currently prototype parameters awaiting further calibration.
+
+## 🖥️ Platform Pages
+
+| Route | Description |
+|---|---|
+| `/` | Project introduction, workflow, mission objectives, and data sources. |
+| `/app` | Overview dashboard and recent analysis activity. |
+| `/app/explore` | Five-step planetary terrain analysis workflow. |
+| `/app/results/:id` | Ranked candidates, maps, charts, and uncertainty ranges. |
+| `/app/results/:id/site/:siteId` | Detailed site comparison and scientific report. |
+| `/app/atlas` | Searchable atlas of candidate locations. |
+| `/app/saved` | Saved sites and local analysis history. |
+| `/app/methodology` | Data sources, feature definitions, and scoring methodology. |
+| `/app/limitations` | Scientific limitations and comparison boundaries. |
+| `/app/about` | Project overview, technologies, roadmap, and credits. |
+
+## 🛠️ Technology Stack
+
+| Category | Technologies |
+|---|---|
+| Frontend | React 19, TypeScript, Vite |
+| Styling | Tailwind CSS v4 |
+| Backend | Python 3.11+, FastAPI |
+| Data Processing | NumPy |
+| Machine Learning | scikit-learn |
+| Maps | Leaflet |
+| Visualization | Recharts, Custom SVG |
+| Storage | Browser localStorage, JSON |
+| Deployment | Docker, Render |
+| Planetary Data | NASA LOLA, MOLA, NASADEM |
+
+## 🏗️ Project Architecture
+
+```text
+Vision-X/
+│
+├── backend/
+│   └── app/
+│       ├── engine/
+│       │   ├── features.py
+│       │   ├── missions.py
+│       │   ├── similarity.py
+│       │   ├── ml.py
+│       │   ├── explain.py
+│       │   └── bodies.py
+│       │
+│       ├── pipeline/
+│       │   ├── readers.py
+│       │   ├── terrain.py
+│       │   ├── build.py
+│       │   └── clustering.py
+│       │
+│       ├── providers/
+│       ├── services/
+│       ├── data/
+│       ├── api.py
+│       └── main.py
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── lib/
+│   │
+│   └── public/
+│       ├── terrain/
+│       └── textures/
+│
+├── Dockerfile
+├── render.yaml
+└── README.md
+```
+
+## ⚙️ Getting Started
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 20+
+- npm
+
+### Installation
+
+**1. Clone the repository**
 
 ```bash
-# 1. Backend: similarity engine + API on http://127.0.0.1:8000
+git clone https://github.com/sadeemalm2005/Vision-X.git
+cd Vision-X
+```
+
+**2. Start the backend**
+
+```bash
 cd backend
 python -m venv .venv
-.venv/Scripts/activate            # Windows  (macOS/Linux: source .venv/bin/activate)
+```
+
+Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+macOS / Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies and start the API:
+
+```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
+```
 
-# 2. Frontend on http://localhost:5173 (proxies /api to the backend)
+**3. Start the frontend**
+
+Open a second terminal:
+
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. API docs are at http://127.0.0.1:8000/docs.
+**4. Open the application**
 
-The processed features (`backend/app/data/processed/nasa_features.json`) and hillshades (`frontend/public/terrain/`) are committed, so the site runs without the raw data. To **rebuild** them from the raw datasets (not in git; about 375 MB):
+- Frontend: http://localhost:5173
+- Backend API: http://127.0.0.1:8000
+- API Documentation: http://127.0.0.1:8000/docs
+
+### Rebuilding NASA Data
+
+Processed terrain features and hillshade images are included in the repository, so the application can run without downloading the original raw datasets.
+
+To rebuild the processed data:
+
+1. Extract the NASA datasets into `backend/data/raw/NASA-DATA`.
+2. Extract the NASADEM tile inside the Earth dataset directory.
+3. Run:
 
 ```bash
-# unzip NASA-DATA.zip into backend/data/raw/ (and unzip the NASADEM tile inside earth/), then:
-cd backend && python -m app.pipeline.build --raw data/raw/NASA-DATA    # ~10 s
+cd backend
+python -m app.pipeline.build --raw data/raw/NASA-DATA
 ```
 
-### Tests
+The original raw datasets are approximately 375 MB and are not included in Git.
+
+## 🧪 Testing
+
+Run the backend tests:
 
 ```bash
-cd backend  && pip install -r requirements-dev.txt && python -m pytest   # 65 tests: terrain math, readers, ML, scoring, API
-cd frontend && npx vitest run            # weight preview + polar projection
-cd frontend && npm run build             # type-check + production build
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
-> Windows note: run vitest from a terminal whose path starts with an upper-case drive letter (`C:\…`). A lower-case `c:\` working directory, as some editors open, makes vitest load itself twice and report "Cannot read properties of undefined (reading 'config')".
+Run frontend tests:
 
----
+```bash
+cd frontend
+npx vitest run
+```
 
-## What is in the app
+Build the frontend:
 
-| Route | Purpose |
+```bash
+npm run build
+```
+
+The project currently includes 65 backend tests covering terrain calculations, data readers, machine learning, similarity scoring, and API behavior.
+
+## 🌐 Deployment
+
+Earth2Moon supports single-service deployment through Docker and Render.
+
+The Dockerfile builds the frontend and serves the application through the FastAPI backend.
+
+To deploy:
+
+1. Connect your GitHub account to [Render](https://render.com).
+2. Select **New → Blueprint**.
+3. Choose the Vision-X repository.
+4. Allow Render to read `render.yaml`.
+5. Click **Apply**.
+
+The application will be deployed to a public Render URL.
+
+> Note: Render's free tier may put inactive services to sleep. The first request after inactivity can take additional time to load.
+
+## 🔐 AI Configuration
+
+AI summaries are optional. The core platform works without an AI API key.
+
+Set one of the following environment variables:
+
+| Provider | Environment Variable |
 |---|---|
-| `/` | Landing page: problem, workflow, mission objectives, transparency, data sources |
-| `/app` | Overview dashboard: counts, latest analysis, top sites, history, data-integration status |
-| `/app/explore` | Five-step workflow: body → target region (with NASA Trek map) → mission → features (availability-checked) → run. Optional custom weights, normalized live |
-| `/app/results/:id` | Ranked results: map, split planetary/Earth view, ranking chart with uncertainty ranges, contribution chart, explanations |
-| `/app/results/:id/site/:siteId` | Full comparison report: *Why this location matches*, score anatomy, fingerprint radar, measurements, distributions, *Where it differs*, provenance |
-| `/app/atlas` | All candidate sites on a map, filterable by Moon/Mars, searchable |
-| `/app/saved` | Saved sites and analysis history (browser-local) |
-| `/app/methodology` | Data & Methodology: pipeline status, planned datasets, feature definitions, scoring rules, integration point |
-| `/app/limitations` | Scientific limitations: similarity vs equivalence, Earth/Moon/Mars comparison |
-| `/app/about` | Project overview, objectives, technologies, roadmap, credits |
+| Claude | `ANTHROPIC_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Gemini | `GEMINI_API_KEY` |
 
----
+To select a provider:
 
-## Architecture
-
-```
-backend/                      Python · FastAPI
-  app/engine/                 PURE scientific logic (no I/O), unit-tested
-    features.py               feature catalog: kernels, tolerances, resolution limits
-    missions.py               mission profiles: weights, required features
-    similarity.py             S = 100·Σ wᵢ sᵢ, coverage, withholding, conservative ranking
-    ml.py                     nearest-neighbour search, Spearman agreement (NumPy)
-    explain.py                template explanations built only from computed values
-    bodies.py                 environmental differences + mandatory disclaimer
-  app/pipeline/               OFFLINE DATA PROCESSING (NumPy)
-    readers.py                LOLA (PDS3), MOLA MEGDR (PDS4), NASADEM (HGT) readers + projections
-    terrain.py                relief, slope, roughness, variability, hillshade, resampling
-    build.py                  harmonize scales, cut Earth windows, write features + PNGs
-    clustering.py             K-means terrain clusters (scikit-learn), k by silhouette
-  app/providers/              DATA LAYER
-    base.py                   DataProvider interface
-    nasa.py                   serves the processed features
-  app/data/catalog/           datasets.json, sites.json (descriptions only, no numbers)
-  app/data/processed/         nasa_features.json (generated, committed)
-  app/services/               orchestration: provider → engine → report
-  app/api.py, main.py         HTTP routes, CORS, validation
-frontend/                     React 19 · TypeScript · Vite · Tailwind v4
-  src/lib/                    typed API client, local persistence, formatting, weight preview
-  src/components/             UI kit, maps (Leaflet), charts (Recharts + custom), result parts
-  src/pages/                  landing + app pages (lazy-loaded)
-  public/textures/            NASA global mosaics used for the planet spheres
+```bash
+EARTH2MOON_AI_PROVIDER=anthropic
 ```
 
-### Technology choices
+For OpenAI, configure the model:
 
-- **FastAPI + pure-Python engine.** Terrain processing (rasterio/GDAL/NumPy) belongs in Python. The engine itself needs no third-party packages yet, so none were added. Geospatial libraries will be added with the real data provider, chosen once the file formats are known.
-- **React + TypeScript + Vite + Tailwind v4.** A typed, component-based UI with a single token-based design system (`src/index.css`).
-- **Leaflet.** NASA Solar System Treks serves Moon/Mars tiles in an equirectangular grid that matches Leaflet's built-in `EPSG:4326` CRS exactly. MapLibre does not support non-Mercator raster grids as simply.
-- **Recharts plus hand-built charts.** Recharts draws the radar, distributions and profiles. Uncertainty ranges and contribution tracks are custom HTML/SVG for clarity.
-- **localStorage for history and saved sites.** There are no accounts in the prototype, so there is no fake login. The limitation is stated in the UI.
-- **No database yet.** Catalogues are small JSON files behind the provider interface. PostgreSQL/PostGIS becomes worthwhile once patch-level search over large rasters is implemented.
+```bash
+EARTH2MOON_AI_MODEL=YOUR_MODEL_NAME
+```
+
+For Claude, the default model is `claude-opus-5-5`; a lower-cost option can be selected using `claude-haiku-5-5`.
+
+For Gemini, the latest stable Flash model available to the configured key is selected automatically by default.
+
+Never commit API keys or secrets to the repository.
+
+## ⚠️ Scientific Limitations
+
+Earth2Moon is a terrain-comparison and research-discovery prototype.
+
+Earth cannot fully reproduce the environmental conditions of the Moon or Mars. Terrain similarity does not establish geological, atmospheric, thermal, or operational equivalence.
+
+The following features are not currently available:
+
+| Feature | Required Data or Processing |
+|---|---|
+| Crater Morphology | Crater detection and analysis |
+| Rock Distribution | Sub-meter imagery |
+| Geological Classification | Geological maps |
+| Regolith Proxies | Material or spectral datasets |
+
+Consequently, crater-navigation and geological-research missions remain locked.
+
+Additional Earth locations, including Death Valley, Meteor Crater, Hawaii, and Iceland, are planned but are not currently scored because their elevation tiles have not yet been integrated.
+
+### Future Improvements
+
+- Integrate additional NASADEM elevation tiles.
+- Expand Earth analog-site coverage.
+- Incorporate higher-resolution planetary elevation datasets.
+- Add geological and crater-related analysis.
+- Improve terrain feature availability.
+- Calibrate scoring weights and tolerances.
+- Conduct sensitivity and ablation testing.
+- Validate results through expert review and reference cases.
+
+## 👥 Team Vision-X
+
+Earth2Moon is developed by **Vision-X**.
+
+| Team Member |
+|---|
+| Sadeem Almohsen |
+| Hayat Mohammed |
+| Renad Algumaei |
+| Raghad Aldroubi |
+| Khulood Al-Jaberi |
+
+## 🙏 Credits & Data Acknowledgments
+
+We acknowledge the scientific missions and organizations whose publicly available datasets and imagery support this project:
+
+- **NASA Lunar Reconnaissance Orbiter (LRO) – LOLA**
+- **NASA Mars Global Surveyor (MGS) – MOLA**
+- **NASADEM – NASA Earthdata**
+- NASA Blue Marble via NASA GIBS.
+- LRO WAC mosaic (NASA/GSFC/ASU).
+- Viking MDIM 2.1 and MOLA shaded relief via NASA Solar System Treks.
+- Earth basemaps © Esri and partners, © OpenStreetMap contributors, © CARTO.
+
+Earth2Moon is an independent project and is not affiliated with, endorsed by, or officially associated with NASA.
 
 ---
 
-## Scoring rules (implemented in `backend/app/engine/similarity.py`)
-
-1. **Formula:** `S = 100 × Σ (wᵢ × sᵢ)`, with weights normalized over the selected features (Σwᵢ = 1).
-2. **Feature similarity sᵢ ∈ [0,1]:**
-   - Numeric features use the Gaussian kernel `exp(−½(Δ/τ)²)`.
-   - Relief uses the same kernel on the **log ratio**, which is scale-invariant.
-   - Geology is a class match: 1 for the same class, 0.6 for the same family, otherwise 0.
-3. **Resolution rule:** the effective resolution is the coarser of the two inputs. A feature is not scored if the effective resolution exceeds that feature's limit; for example, rocks need ≤ 1 m.
-4. **No silent matches:** missing features are excluded and reported. `coverage` is the weight of the features actually compared.
-5. **Withholding:** the score is withheld in two cases:
-   - coverage is below 60%
-   - a mission-required feature (craters for crater navigation, geology for geological research) cannot be compared
-6. **Conservative ranking:** sites are ranked by the **lower bound**, which treats missing weight as zero agreement. A data gap can therefore never lift a site above a fully measured one. The re-normalized score and its possible range are shown alongside.
-7. **Scale flag:** a feature compared above its recommended resolution (e.g. slope at 1.85 km) is scored but flagged as regional-scale, and the result's confidence is capped at medium.
-8. **Explanations** are deterministic templates over computed values. No language model generates numbers or claims.
-
-Mission weights, tolerances and kernels are **prototype values**. The rover profile reproduces the proposal's illustrative weights (30/30/15/15/10). They must be calibrated with sensitivity and ablation testing on real data.
-
----
-
-## Adding more data
-
-- **More Earth sites:** download the NASADEM tile (e.g. `n35w112` for Meteor Crater, `n36w117` for Death Valley, `n19w156` for Hawaii). Extend `build_earth` in `app/pipeline/build.py` to loop over tiles, add the tile id to the site in `catalog/sites.json`, and rebuild.
-- **Rover-scale Mars:** a HiRISE DTM (~1 m) for a target would allow 40 m comparisons like the Moon's.
-- **Geology / craters / rocks:** geological maps, a crater-detection step, or sub-metre imagery unlock the locked features and missions.
-- Then recalibrate tolerances and weights and run the validation plan (reference cases, sensitivity, ablation, expert review).
-
----
-
-## Deployment (one public link)
-
-The `Dockerfile` builds the frontend and serves it from the FastAPI backend, so the whole site runs as **one service at one URL**.
-
-**Render (free):**
-1. Sign in at https://render.com with GitHub.
-2. Choose **New → Blueprint** and select this repository. Render reads `render.yaml`.
-3. Click **Apply**. After the build (about 5 minutes) the site is live at `https://earth2moon-xxxx.onrender.com`.
-
-The free tier sleeps after 15 minutes without visitors; the first visit after that takes about a minute to wake up. Each push to `main` redeploys automatically.
-
-## Enabling AI summaries
-
-Set **one** API key as an environment variable. Locally, set it in the terminal before starting the backend; on Render, add it under **Environment**. Never commit a key.
-
-| Provider | Key variable | Model |
-|---|---|---|
-| Claude (Anthropic) | `ANTHROPIC_API_KEY` | default `claude-opus-5-5`; set `EARTH2MOON_AI_MODEL=claude-haiku-5-5` for a much cheaper model |
-| OpenAI | `OPENAI_API_KEY` | **required:** `EARTH2MOON_AI_MODEL=<current OpenAI model name>` |
-| Gemini (Google AI Studio, free tier) | `GEMINI_API_KEY` | optional: by default the newest stable *Flash* model available to the key is picked automatically |
-
-If several keys are set, pick one with `EARTH2MOON_AI_PROVIDER=anthropic|openai|gemini`, or switch the feature off with `none`.
-
-**Claude settings:** the request uses `effort: low` and server-side refusal fallbacks. A report summary uses roughly 1–3 thousand tokens; check the provider's pricing page for current rates.
-
-## Configuration
-
-| Variable | Where | Default | Purpose |
-|---|---|---|---|
-| `EARTH2MOON_DATA_PROVIDER` | backend | `nasa` | Which data provider serves measurements |
-| `EARTH2MOON_AI_PROVIDER` | backend | `auto` | `auto` (first key found), `anthropic`, `openai`, `gemini` or `none` |
-| `EARTH2MOON_AI_MODEL` | backend | Claude: `claude-opus-5-5` | Model name for the chosen provider |
-| `EARTH2MOON_AI_DAILY_LIMIT` | backend | `200` | Maximum new AI summaries per day (cache hits are free) |
-| `EARTH2MOON_CORS_ORIGINS` | backend | `http://localhost:5173,…` | Allowed browser origins |
-| `VITE_API_BASE_URL` | frontend build | *(same origin)* | Absolute API URL when hosted separately |
-| `VITE_API_PROXY` | frontend dev | `http://127.0.0.1:8000` | Dev-server proxy target |
-
-No API keys are needed for the core site; one is needed only for AI summaries. The tile services used (NASA Trek, NASA GIBS for the Earth texture, Esri, CARTO) are public. No secrets are stored in frontend code.
-
-## Credits
-
-Planet imagery: NASA Blue Marble via NASA GIBS; LRO WAC mosaic (NASA/GSFC/ASU); Viking MDIM 2.1 and MOLA shaded relief (NASA/JPL/USGS/GSFC) via NASA Solar System Treks. Earth basemaps © Esri and partners, © OpenStreetMap contributors, © CARTO. Earth2Moon is an independent project, not affiliated with or endorsed by NASA.
+<p align="center">
+  <strong>🌍 Earth2Moon — Find Earth. Explore Beyond.</strong>
+  <br />
+  Built by Vision-X 🚀
+</p>
