@@ -40,7 +40,7 @@ export function ConfidenceBadge({ confidence, coverage }: { confidence: Confiden
   const tone = confidence === 'high' ? 'good' : confidence === 'medium' ? 'warn' : 'bad'
   return (
     <Badge tone={tone}>
-      {CONFIDENCE_LABEL[confidence]} · {pct(coverage)}
+      {CONFIDENCE_LABEL[confidence]} · {pct(coverage)} data
     </Badge>
   )
 }

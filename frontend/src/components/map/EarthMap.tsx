@@ -1,6 +1,7 @@
 import L from 'leaflet'
 import { useEffect, useMemo } from 'react'
-import { LayersControl, MapContainer, Marker, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { ImageOverlay, LayersControl, MapContainer, Marker, Rectangle, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { scoreColor } from '../../lib/format'
 import clsx from 'clsx'
 import { AutoResize } from './AutoResize'
 
@@ -12,6 +13,18 @@ export interface MapSite {
   rank?: number
   color?: string
   dimmed?: boolean
+}
+
+export interface HeatCell {
+  id: string
+  bounds: [[number, number], [number, number]]
+  score: number | null
+  rank: number
+}
+
+export interface DemOverlay {
+  image: string
+  bounds: [[number, number], [number, number]]
 }
 
 // Imagery only: these basemaps are a visual reference and are NOT analysed.
@@ -30,12 +43,12 @@ function markerIcon(site: MapSite, selected: boolean) {
   return L.divIcon({ html, className: 'e2m-marker', iconSize: [size, size], iconAnchor: [size / 2, size / 2] })
 }
 
-function FitToSites({ sites, fitKey, maxZoom }: { sites: MapSite[]; fitKey: string; maxZoom: number }) {
+function FitToSites({ sites, fitKey, maxZoom, padding }: { sites: MapSite[]; fitKey: string; maxZoom: number; padding: number }) {
   const map = useMap()
   useEffect(() => {
     if (!sites.length) return
     const bounds = L.latLngBounds(sites.map((s) => [s.lat, s.lon] as [number, number]))
-    map.fitBounds(bounds, { padding: [48, 48], maxZoom })
+    map.fitBounds(bounds, { padding: [padding, padding], maxZoom })
     // fitKey intentionally drives refits (not every render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, fitKey])
@@ -59,6 +72,9 @@ export function EarthMap({
   className,
   flyToSelection = false,
   maxFitZoom = 6,
+  overlays = [],
+  heat = [],
+  fitTo,
 }: {
   sites: MapSite[]
   selectedId?: string | null
@@ -66,8 +82,14 @@ export function EarthMap({
   className?: string
   flyToSelection?: boolean
   maxFitZoom?: number
+  /** Hillshades rendered from connected DEM tiles. */
+  overlays?: DemOverlay[]
+  /** Similarity heatmap: one rectangle per scored Earth patch. */
+  heat?: HeatCell[]
+  /** Optional explicit points to fit instead of the markers. */
+  fitTo?: MapSite[]
 }) {
-  const fitKey = useMemo(() => sites.map((s) => s.id).sort().join('|'), [sites])
+  const fitKey = useMemo(() => (fitTo ?? sites).map((s) => s.id).sort().join('|'), [sites, fitTo])
   const selected = sites.find((s) => s.id === selectedId)
 
   return (
@@ -94,8 +116,28 @@ export function EarthMap({
             />
           </LayersControl.BaseLayer>
         </LayersControl>
+        {overlays.map((o) => (
+          <ImageOverlay key={o.image} url={o.image} bounds={o.bounds} opacity={0.55} attribution="Hillshade from NASADEM (NASA/JPL)" className="mix-blend-multiply" />
+        ))}
+        {heat.map((c) => (
+          <Rectangle
+            key={c.id}
+            bounds={c.bounds}
+            pathOptions={{
+              color: c.id === selectedId ? '#F3F6FA' : scoreColor(c.score),
+              weight: c.id === selectedId ? 2 : 0,
+              fillColor: scoreColor(c.score),
+              fillOpacity: c.score === null ? 0.08 : 0.12 + (c.score / 100) * 0.5,
+            }}
+            eventHandlers={{ click: () => onSelect?.(c.id) }}
+          >
+            <Tooltip sticky opacity={1}>
+              #{c.rank} · {c.score === null ? 'score withheld' : `${c.score.toFixed(0)} / 100`}
+            </Tooltip>
+          </Rectangle>
+        ))}
         <AutoResize />
-        <FitToSites sites={sites} fitKey={fitKey} maxZoom={maxFitZoom} />
+        <FitToSites sites={fitTo ?? sites} fitKey={fitKey} maxZoom={maxFitZoom} padding={fitTo ? 4 : 48} />
         {flyToSelection && <FlyToSelected site={selected} />}
         {sites.map((s) => (
           <Marker

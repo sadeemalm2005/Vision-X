@@ -18,12 +18,13 @@ const TECH = [
   ['Maps', 'Leaflet with NASA Solar System Treks (Moon/Mars, EPSG:4326) and Esri / CARTO basemaps'],
   ['Charts', 'Recharts plus purpose-built SVG/HTML charts for ranges and contributions'],
   ['Backend', 'Python 3, FastAPI, Pydantic; pure-Python similarity engine with pytest coverage'],
-  ['Data layer', 'Pluggable DataProvider interface; demo provider now, dataset provider next'],
+  ['Data pipeline', 'NumPy: reads PDS3/PDS4/HGT DEMs, harmonizes scales, computes features and hillshades'],
+  ['Data layer', 'DataProvider interface serving precomputed features from LOLA, MOLA and NASADEM'],
   ['Persistence', 'Browser localStorage for history and saved sites (no accounts in the prototype)'],
 ]
 
 const FUTURE = [
-  'Ingest the project DEMs and imagery; compute features over defined analysis windows.',
+  'Add NASADEM tiles for Death Valley, Meteor Crater and Hawaii so every candidate site can be scored.',
   'Patch-level search across wider Earth regions instead of a fixed candidate list.',
   'Unsupervised clustering of terrain patches; supervised models only with a defensible labelled set.',
   'Crater and rock detection where image resolution and labels support it.',
@@ -133,8 +134,9 @@ export default function About() {
           <div className="flex flex-wrap gap-2">
             <Badge tone="good">Similarity engine · implemented & tested</Badge>
             <Badge tone="good">Interface & reports · implemented</Badge>
-            <Badge tone="warn">Dataset ingestion · awaiting project data</Badge>
-            <Badge tone="warn">Measurements · demonstration values</Badge>
+            <Badge tone="good">LOLA, MOLA, NASADEM · connected</Badge>
+            <Badge tone="warn">Craters, rocks, geology · need further data</Badge>
+            <Badge tone="warn">Earth coverage · one Atacama tile</Badge>
           </div>
           <p>
             Planet imagery: NASA Blue Marble via NASA GIBS; LRO Wide Angle Camera mosaic (NASA/GSFC/Arizona State University); Viking MDIM 2.1

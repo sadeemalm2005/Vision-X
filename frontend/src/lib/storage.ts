@@ -9,8 +9,8 @@
 import { useSyncExternalStore } from 'react'
 import type { AnalysisResult } from './types'
 
-const HISTORY_KEY = 'e2m.history.v1'
-const SAVED_KEY = 'e2m.saved.v1'
+const HISTORY_KEY = 'e2m.history.v2'
+const SAVED_KEY = 'e2m.saved.v2'
 const MAX_HISTORY = 25
 
 export interface SavedSite {

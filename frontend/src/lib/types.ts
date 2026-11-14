@@ -1,7 +1,7 @@
 // Mirrors the FastAPI response shapes (backend/app/api.py, services/*).
 
 export type Body = 'moon' | 'mars'
-export type DataStatus = 'demo' | 'real'
+export type DataStatus = 'demo' | 'real' | 'no_data'
 export type FeatureStatus = 'scored' | 'missing_target' | 'missing_candidate' | 'insufficient_resolution'
 export type Confidence = 'high' | 'medium' | 'low'
 
@@ -21,15 +21,42 @@ export interface TargetRegion {
   lon: number
   description: string
   data_status: DataStatus
+  scale_profile: string
+  window_m: number
+  image: { src: string; window_frac: number; source: string }
   measurements: Record<string, Measurement>
 }
 
+/** Catalogue entry for a research location (no measurements of its own). */
+export interface Site {
+  id: string
+  name: string
+  country: string
+  lat: number
+  lon: number
+  relevant_bodies: Body[]
+  description: string
+  terrain: string[]
+  potential_comparison: string
+  applications: string[]
+  caution: string
+  data_status: DataStatus
+  tiles: string[]
+  suggested_tile: string | null
+}
+
+/** A scored Earth analysis window, with its parent site's context. */
 export interface CandidateSite {
   id: string
   name: string
   country: string
   lat: number
   lon: number
+  bounds: [[number, number], [number, number]]
+  image_box: [number, number, number, number]
+  site_id: string
+  site_name: string
+  tile_id: string
   relevant_bodies: Body[]
   description: string
   terrain: string[]
@@ -52,6 +79,8 @@ export interface FeatureSpec {
   relevance: string
   tolerance: number | null
   max_effective_resolution_m: number | null
+  recommended_resolution_m: number | null
+  requirement: string | null
 }
 
 export interface MissionProfile {
@@ -87,6 +116,7 @@ export interface FeatureAvailability {
   candidates_comparable: number
   candidates_total: number
   reason: string | null
+  scale_note: string | null
 }
 
 export interface FeatureResult {
@@ -101,6 +131,7 @@ export interface FeatureResult {
   target_dataset: string | null
   candidate_dataset: string | null
   note: string | null
+  scale_limited: boolean
 }
 
 export interface ExplanationPoint {
@@ -128,8 +159,28 @@ export interface SiteResult {
   lower_bound: number
   upper_bound: number
   confidence: Confidence
+  scale_limited: boolean
   features: FeatureResult[]
   explanation: Explanation
+}
+
+export interface ScaleProfile {
+  id: string
+  name: string
+  grid_m: number
+  window_m: number
+  stride_m: number
+  description: string
+}
+
+export interface PatchScore {
+  id: string
+  rank: number
+  lat: number
+  lon: number
+  bounds: [[number, number], [number, number]]
+  score: number | null
+  lower_bound: number
 }
 
 export interface EnvironmentalDifference {
@@ -147,6 +198,7 @@ export interface AnalysisResult {
   mission: { id: string; name: string; caveat: string; required: string[] }
   weights: { feature_id: string; weight: number; default_weight: number | null }[]
   results: SiteResult[]
+  search: { scale_profile: ScaleProfile; patches_total: number; patches_withheld: number; top_n: number; all: PatchScore[] }
   datasets_used: string[]
   environmental_differences: EnvironmentalDifference[]
   scoring: { formula: string; min_coverage: number; rule: string }
@@ -159,6 +211,7 @@ export interface AnalyzeRequest {
   mission_id: string
   features: string[]
   weights?: Record<string, number>
+  top_n?: number
 }
 
 export interface Histogram {
@@ -181,7 +234,26 @@ export interface Meta {
   data_mode: DataStatus
   disclaimer: string
   min_coverage: number
-  counts: { candidates: number; targets: number; datasets: number }
+  counts: { candidates: number; sites_with_data: number; targets: number; datasets: number; patches: Record<string, number> }
+  profiles: ScaleProfile[]
+  generated_at?: string
+  pipeline_version?: string
+}
+
+export interface EarthTileLayer {
+  id: string
+  site_id: string
+  bounds: [[number, number], [number, number]]
+  image: string
+  image_px: [number, number]
+  native_resolution_m: number
+}
+
+export interface MapLayers {
+  moon_overview: { src: string; px: number; extent_m: number; scale_m: number }
+  earth_tiles: EarthTileLayer[]
+  generated_at: string
+  pipeline_version: string
 }
 
 export interface BodiesInfo {

@@ -166,8 +166,8 @@ function Hero() {
             </a>
           </motion.div>
           <motion.p {...fade(0.32)} className="mt-10 max-w-md text-xs leading-relaxed text-faint">
-            Prototype for research discovery. Terrain similarity is not environmental equivalence, and current results use labelled
-            demonstration data while project datasets are integrated.
+            Prototype for research discovery, built on LOLA, MOLA and NASADEM elevation data. Terrain similarity is not environmental
+            equivalence.
           </motion.p>
         </div>
         <HeroVisual />
@@ -436,7 +436,7 @@ function DataSources() {
             <h2 className="text-[30px] leading-[1.12] font-semibold sm:text-[38px]">Built for authoritative, open datasets.</h2>
             <p className="mt-5 text-[15px] leading-relaxed text-muted">
               Every input records its instrument, resolution and processing level, and comparisons run at a scale the coarsest input can
-              support. Dataset integration is in progress. Until then, the platform runs on clearly labelled demonstration values.
+              support. The prototype runs on the LOLA south-pole DEM, MOLA global topography and a NASADEM tile in the Atacama Desert.
             </p>
             <Link to="/app/methodology" className="mt-6 inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
               Read the data &amp; methodology <ArrowRight aria-hidden className="size-3.5" />

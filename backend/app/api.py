@@ -15,7 +15,7 @@ from .engine.similarity import MIN_COVERAGE
 from .providers.base import DataProvider
 from .providers.registry import get_provider
 from .services.analysis import AnalysisError, feature_availability, run_analysis
-from .services.serializers import candidate_dict, target_dict
+from .services.serializers import site_dict, target_dict
 
 router = APIRouter(prefix="/api")
 
@@ -26,7 +26,7 @@ class AnalyzeRequest(BaseModel):
     mission_id: str = Field(min_length=1, max_length=64)
     features: list[str] = Field(min_length=1, max_length=len(FEATURES))
     weights: dict[str, float] | None = None
-    candidate_ids: list[str] | None = None
+    top_n: int = Field(default=10, ge=1, le=50)
 
 
 @router.get("/health")
@@ -36,25 +36,32 @@ def health(provider: DataProvider = Depends(get_provider)) -> dict:
 
 @router.get("/meta")
 def meta(provider: DataProvider = Depends(get_provider)) -> dict:
+    sites = provider.list_sites()
     return {
         "provider": provider.name,
         "data_mode": provider.mode,
         "disclaimer": DISCLAIMER,
         "min_coverage": MIN_COVERAGE,
         "counts": {
-            "candidates": len(provider.list_candidates()),
+            "candidates": len(sites),
+            "sites_with_data": sum(1 for s in sites if s.data_status == "real"),
             "targets": len(provider.list_targets()),
             "datasets": len(provider.list_datasets()),
+            "patches": {p.id: len(provider.list_patches(p.id)) for p in provider.list_profiles()},
         },
+        "profiles": [asdict(p) for p in provider.list_profiles()],
+        **{k: v for k, v in provider.map_layers().items() if k in ("generated_at", "pipeline_version")},
     }
+
+
+@router.get("/map-layers")
+def map_layers(provider: DataProvider = Depends(get_provider)) -> dict:
+    return provider.map_layers()
 
 
 @router.get("/bodies")
 def bodies() -> dict:
-    return {
-        "bodies": BODIES,
-        "differences": {b: environmental_differences(b) for b in ("moon", "mars")},
-    }
+    return {"bodies": BODIES, "differences": {b: environmental_differences(b) for b in ("moon", "mars")}}
 
 
 @router.get("/features")
@@ -88,17 +95,9 @@ def target_features(target_id: str, provider: DataProvider = Depends(get_provide
     return feature_availability(provider, target)
 
 
-@router.get("/candidates")
-def candidates(provider: DataProvider = Depends(get_provider)) -> list[dict]:
-    return [candidate_dict(c) for c in provider.list_candidates()]
-
-
-@router.get("/candidates/{site_id}")
-def candidate(site_id: str, provider: DataProvider = Depends(get_provider)) -> dict:
-    c = provider.get_candidate(site_id)
-    if c is None:
-        raise HTTPException(404, f"Unknown site '{site_id}'")
-    return candidate_dict(c)
+@router.get("/sites")
+def sites(provider: DataProvider = Depends(get_provider)) -> list[dict]:
+    return [site_dict(s) for s in provider.list_sites()]
 
 
 @router.get("/terrain/{entity_id}")
@@ -119,7 +118,7 @@ def analyze(req: AnalyzeRequest, provider: DataProvider = Depends(get_provider))
             mission_id=req.mission_id,
             features=req.features,
             weights=req.weights,
-            candidate_ids=req.candidate_ids,
+            top_n=req.top_n,
         )
     except AnalysisError as exc:
         raise HTTPException(422, str(exc)) from exc

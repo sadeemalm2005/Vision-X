@@ -16,7 +16,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useApi } from '../../lib/useApi'
 import { api } from '../../lib/api'
 import { Logo } from '../Logo'
-import { DemoBadge } from '../ui'
+import { Badge, DemoBadge } from '../ui'
 
 const NAV = [
   { group: 'Workspace', items: [
@@ -79,14 +79,14 @@ function DataModeCard() {
     <div className="rounded-xl border border-line bg-base/60 p-3.5">
       <div className="mb-2 flex items-center justify-between">
         <p className="eyebrow">Data mode</p>
-        {meta.data?.data_mode === 'demo' ? <DemoBadge label="Demo" /> : null}
+        {meta.data?.data_mode === 'demo' ? <DemoBadge label="Demo" /> : meta.data ? <Badge tone="good">NASA</Badge> : null}
       </div>
       {meta.error ? (
         <p className="text-xs leading-snug text-bad">Analysis service offline</p>
       ) : (
         <p className="text-xs leading-snug text-muted">
           {meta.data?.data_mode === 'real'
-            ? 'Connected to project datasets.'
+            ? 'LOLA · MOLA · NASADEM elevation data.'
             : 'Synthetic values until the project datasets are connected.'}
         </p>
       )}

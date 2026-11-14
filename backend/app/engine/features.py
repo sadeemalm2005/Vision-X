@@ -59,6 +59,11 @@ class FeatureSpec:
     relevance: str
     tolerance: float | None = None
     max_effective_resolution_m: float | None = None
+    # Finer scale at which the feature carries its full meaning; comparisons
+    # coarser than this are allowed but flagged as regional-scale.
+    recommended_resolution_m: float | None = None
+    # What would be needed to measure the feature, if no dataset provides it.
+    requirement: str | None = None
     # categorical only: class -> family
     families: dict[str, str] = field(default_factory=dict)
     family_similarity: float = 0.6
@@ -74,9 +79,9 @@ FEATURES: dict[str, FeatureSpec] = {
             unit="m",
             kind="log_ratio",
             tolerance=1.8,
-            max_effective_resolution_m=1000.0,
+            max_effective_resolution_m=5000.0,
             description="Vertical range of terrain within the analysis window.",
-            measured_as="Elevation range (P95 - P5) within the analysis window, from a DEM.",
+            measured_as="Elevation range (95th minus 5th percentile) within the analysis window.",
             relevance="Topographic context, line-of-sight and route planning.",
         ),
         FeatureSpec(
@@ -86,9 +91,10 @@ FEATURES: dict[str, FeatureSpec] = {
             unit="°",
             kind="numeric",
             tolerance=3.0,
-            max_effective_resolution_m=500.0,
+            max_effective_resolution_m=2000.0,
+            recommended_resolution_m=100.0,
             description="Mean terrain inclination derived from elevation.",
-            measured_as="Mean slope angle from finite differences on a DEM.",
+            measured_as="Mean slope angle from central differences on the harmonized DEM grid.",
             relevance="Rover traversability and hazard assessment.",
         ),
         FeatureSpec(
@@ -100,7 +106,7 @@ FEATURES: dict[str, FeatureSpec] = {
             tolerance=2.0,
             max_effective_resolution_m=100.0,
             description="Small-scale vertical variability of the surface.",
-            measured_as="RMS deviation of elevation from a local plane in a moving window.",
+            measured_as="RMS of elevation minus its 3×3-cell local mean (small-scale relief at ~3 grid cells).",
             relevance="Mobility, wheel loading and landing-area screening.",
         ),
         FeatureSpec(
@@ -110,7 +116,8 @@ FEATURES: dict[str, FeatureSpec] = {
             unit="°",
             kind="numeric",
             tolerance=2.5,
-            max_effective_resolution_m=500.0,
+            max_effective_resolution_m=2000.0,
+            recommended_resolution_m=100.0,
             description="How much slope changes across the window.",
             measured_as="Standard deviation of slope within the analysis window.",
             relevance="Diversity of driving conditions and training scenarios.",
@@ -125,6 +132,7 @@ FEATURES: dict[str, FeatureSpec] = {
             max_effective_resolution_m=100.0,
             description="Shape of the dominant crater(s): depth relative to diameter.",
             measured_as="Depth-to-diameter ratio of craters resolved in the DEM.",
+            requirement="Needs a crater-detection step, which is not implemented yet.",
             relevance="Crater navigation, rim traverses and impact geology.",
         ),
         FeatureSpec(
@@ -137,6 +145,7 @@ FEATURES: dict[str, FeatureSpec] = {
             max_effective_resolution_m=1.0,
             description="Fraction of surface covered by resolvable rocks.",
             measured_as="Rock cover from image-based detection; needs sub-metre imagery.",
+            requirement="Needs sub-metre imagery (e.g. LROC NAC, HiRISE) for both sides.",
             relevance="Obstacle avoidance and hazard detection.",
         ),
         FeatureSpec(
@@ -158,6 +167,7 @@ FEATURES: dict[str, FeatureSpec] = {
             },
             description="Dominant mapped surface unit class.",
             measured_as="Dominant unit from a published geological map, grouped into families.",
+            requirement="Needs geological maps for the target and the Earth sites.",
             relevance="Geological field research and sampling practice.",
         ),
         FeatureSpec(
@@ -170,6 +180,7 @@ FEATURES: dict[str, FeatureSpec] = {
             max_effective_resolution_m=None,
             description="Indicators of loose surface material properties.",
             measured_as="Requires material maps, spectral data or laboratory samples.",
+            requirement="Needs material maps, spectral data or laboratory samples.",
             relevance="Surface-material studies. Not a substitute for physical testing.",
         ),
     ]

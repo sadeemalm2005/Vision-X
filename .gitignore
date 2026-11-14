@@ -16,3 +16,6 @@ frontend/dist/
 
 # Real datasets are large; keep them out of git unless agreed otherwise
 backend/data/
+
+# Raw dataset archives (large; keep local). Processed features in backend/app/data/processed ARE committed.
+*.zip

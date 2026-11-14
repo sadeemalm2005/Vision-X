@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { EarthMap } from '../../components/map/EarthMap'
 import { Planet } from '../../components/Planet'
 import { ConfidenceBadge, ScoreDial } from '../../components/results/ResultParts'
-import { Badge, ButtonLink, DemoBadge, DemoNotice, EmptyState, ErrorState, Panel, PanelHeader, Skeleton, Stat } from '../../components/ui'
+import { Badge, ButtonLink, DemoNotice, EmptyState, ErrorState, Panel, PanelHeader, Skeleton, Stat } from '../../components/ui'
 import { api } from '../../lib/api'
 import { BODY_COLOR, BODY_LABEL, formatDate, formatResolution, scoreColor } from '../../lib/format'
 import { useHistory, useSaved } from '../../lib/storage'
@@ -11,7 +11,7 @@ import { useApi } from '../../lib/useApi'
 
 export default function Overview() {
   const meta = useApi('meta', api.meta)
-  const candidates = useApi('candidates', api.candidates)
+  const layers = useApi('mapLayers', api.mapLayers)
   const datasets = useApi('datasets', api.datasets)
   const all = useHistory()
   const savedList = useSaved()
@@ -29,8 +29,8 @@ export default function Overview() {
             <p className="eyebrow mb-3">Overview</p>
             <h1 className="text-[28px] leading-tight font-semibold sm:text-[34px]">Mission control for analog site discovery</h1>
             <p className="mt-3 text-[15px] leading-relaxed text-muted">
-              Select a lunar or Martian target, choose what you want to test, and rank Earth sites by measurable terrain similarity, with every
-              limitation spelled out.
+              Select a lunar or Martian target, choose what you want to test, and rank Earth terrain by measurable similarity computed from
+              LOLA, MOLA and NASADEM elevation data, with every limitation spelled out.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               <ButtonLink to="/app/explore"><Compass aria-hidden className="size-4" /> New analysis</ButtonLink>
@@ -55,7 +55,11 @@ export default function Overview() {
 
       {/* stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="Candidate sites" value={meta.data?.counts.candidates ?? '—'} hint="Research candidates, not validated analogs" />
+        <Stat
+          label="Earth windows"
+          value={meta.data ? meta.data.counts.patches.lunar_fine + meta.data.counts.patches.mars_regional : '—'}
+          hint={meta.data ? `${meta.data.counts.sites_with_data} of ${meta.data.counts.candidates} candidate sites have elevation data` : 'Loading…'}
+        />
         <Stat
           label="Selected target"
           value={latest ? <span style={{ color: BODY_COLOR[latest.body] }}>{BODY_LABEL[latest.body]}</span> : '—'}
@@ -76,11 +80,14 @@ export default function Overview() {
           {latest ? (
             <div className="grid gap-4 p-4 lg:grid-cols-[1fr_1fr]">
               <EarthMap
-                sites={latest.results.map((r) => ({ id: r.site.id, name: r.site.name, lat: r.site.lat, lon: r.site.lon, rank: r.rank, color: scoreColor(r.score), dimmed: r.withheld }))}
+                sites={latest.results.slice(0, 5).map((r) => ({ id: r.site.id, name: r.site.name, lat: r.site.lat, lon: r.site.lon, rank: r.rank, color: scoreColor(r.score), dimmed: r.withheld }))}
+                heat={(latest.search?.all ?? []).map((c) => ({ id: c.id, bounds: c.bounds, score: c.score, rank: c.rank }))}
+                overlays={(layers.data?.earth_tiles ?? []).map((t) => ({ image: t.image, bounds: t.bounds }))}
+                maxFitZoom={9}
                 className="h-[300px]"
               />
               <div className="flex min-w-0 flex-col">
-                <p className="eyebrow mb-3 flex items-center justify-between gap-2">Top matching sites {latest.data_mode === 'demo' && <DemoBadge label="Demo" />}</p>
+                <p className="eyebrow mb-3 flex items-center justify-between gap-2">Top matching Earth windows <Badge tone="good">NASA data</Badge></p>
                 <ol className="flex flex-col divide-y divide-line">
                   {latest.results.slice(0, 4).map((r) => (
                     <li key={r.site.id}>
@@ -190,7 +197,6 @@ export default function Overview() {
           </>
         )}
       </Panel>
-      {candidates.error && <ErrorState error={candidates.error} onRetry={candidates.reload} />}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { computeAxisMax, ContributionBreakdown, ElevationProfile, FingerprintRad
 import { EarthMap } from '../../components/map/EarthMap'
 import { PlanetMap } from '../../components/map/PlanetMap'
 import { Planet } from '../../components/Planet'
+import { PatchTerrain, TargetTerrain } from '../../components/TerrainImage'
 import { ConfidenceBadge, CoverageExplainer, Disclaimer, ScoreDial, WhereItDiffers } from '../../components/results/ResultParts'
 import { SaveButton } from '../../components/results/SaveButton'
 import { Badge, Button, ButtonLink, DemoBadge, EmptyState, ErrorState, LoadingBlock, Panel, PanelHeader } from '../../components/ui'
@@ -21,6 +22,7 @@ export default function SiteReport() {
   const result = analysis?.results.find((r) => r.site.id === siteId)
   const catalog = useFeatureCatalog()
   const datasets = useApi('datasets', api.datasets)
+  const layers = useApi('mapLayers', api.mapLayers)
   const tTerrain = useApi(analysis ? `terrain:${analysis.target.id}` : null, () => api.terrain(analysis!.target.id))
   const sTerrain = useApi(result ? `terrain:${result.site.id}` : null, () => api.terrain(result!.site.id))
   const axisMax = useMemo(() => (analysis ? computeAxisMax(analysis.results) : {}), [analysis])
@@ -86,9 +88,35 @@ export default function SiteReport() {
       <p className="max-w-4xl text-[16px] leading-relaxed text-ink/90">
         <span className="font-medium text-ink">{ex.headline}</span> {ex.summary}
       </p>
+      {result.scale_limited && (
+        <p className="rounded-xl border border-warn/25 bg-warn/[0.06] px-4 py-3 text-[13px] leading-relaxed text-warn/90">
+          <span className="font-semibold text-warn">Regional-scale comparison.</span> Both sides were compared on a{' '}
+          {Math.round(analysis.search.scale_profile.grid_m)} m grid over {analysis.search.scale_profile.window_m / 1000} km windows, so slopes describe broad
+          landforms, not the ground a rover would drive on. Rover-scale Mars comparisons need finer data such as HiRISE DTMs.
+        </p>
+      )}
       {result.withheld && (
         <ErrorState className="items-start text-left" error={`Overall score withheld. ${result.withheld_reason ?? ''} Feature-level comparisons below are still valid for the features that could be measured.`} />
       )}
+
+      {/* terrain images */}
+      <Panel>
+        <PanelHeader eyebrow="Terrain" title="Shaded relief from the elevation data" />
+        <div className="grid gap-5 p-5 sm:grid-cols-2">
+          <div>
+            <p className="eyebrow mb-2" style={{ color: BODY_COLOR[analysis.body] }}>{t.name}</p>
+            <TargetTerrain target={t} />
+          </div>
+          <div>
+            <p className="eyebrow mb-2 text-earth">{site.name}</p>
+            <PatchTerrain site={site} />
+          </div>
+        </div>
+        <p className="border-t border-line px-5 py-3 text-[11.5px] leading-relaxed text-faint">
+          Both images are rendered from the same DEMs the features were computed from (sun from the north-west). The target image shows
+          surrounding context with the analysis window boxed; the Earth image is the analysis window itself.
+        </p>
+      </Panel>
 
       {/* why it matches */}
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
@@ -146,7 +174,6 @@ export default function SiteReport() {
         <PanelHeader
           eyebrow="Terrain distributions"
           title="Slope distribution and elevation profile"
-          action={<DemoBadge label="Synthetic shapes" />}
         />
         {tTerrain.error || sTerrain.error ? (
           <div className="p-5"><ErrorState error={(tTerrain.error ?? sTerrain.error)!} onRetry={() => { tTerrain.reload(); sTerrain.reload() }} /></div>
@@ -159,12 +186,11 @@ export default function SiteReport() {
               <SlopeDistribution target={tTerrain.data} site={sTerrain.data} body={analysis.body} targetName={t.name} siteName={site.name} />
             </figure>
             <figure>
-              <figcaption className="mb-2 text-[12.5px] text-muted">Elevation along a 4 km transect (m above local minimum)</figcaption>
+              <figcaption className="mb-2 text-[12.5px] text-muted">Elevation along a west–east transect through the window centre (m above its minimum)</figcaption>
               <ElevationProfile target={tTerrain.data} site={sTerrain.data} body={analysis.body} targetName={t.name} siteName={site.name} />
             </figure>
-            <p className="text-[12px] leading-relaxed text-warn/90 lg:col-span-2">
-              These curves are generated procedurally from the demonstration summary values so the charts can be reviewed. They are not terrain
-              data. Real distributions will be computed from the DEMs once the project datasets are connected.
+            <p className="text-[12px] leading-relaxed text-faint lg:col-span-2">
+              Computed from the DEM pixels of each analysis window on the shared {Math.round(analysis.search.scale_profile.grid_m)} m grid.
             </p>
           </div>
         )}
@@ -222,7 +248,7 @@ export default function SiteReport() {
             })}
           </ul>
           <p className="border-t border-line px-5 py-3 text-[11.5px] leading-relaxed text-faint">
-            Values in this report are labelled with the dataset each is planned to come from. No dataset is processed yet.
+            Every value in this report was computed by the Earth2Moon pipeline from the datasets listed above.
           </p>
         </Panel>
       </div>
@@ -230,7 +256,14 @@ export default function SiteReport() {
       {/* split maps */}
       <div className="grid gap-4 md:grid-cols-2">
         <PlanetMap body={analysis.body} points={[{ id: t.id, name: t.name, lat: t.lat, lon: t.lon }]} zoom={5} className="h-[320px]" />
-        <EarthMap sites={[{ id: site.id, name: site.name, lat: site.lat, lon: site.lon, rank: result.rank, color: scoreColor(result.score) }]} selectedId={site.id} maxFitZoom={12} className="h-[320px]" />
+        <EarthMap
+          sites={[{ id: site.id, name: site.name, lat: site.lat, lon: site.lon, rank: result.rank, color: scoreColor(result.score) }]}
+          heat={[{ id: site.id, bounds: site.bounds, score: result.score, rank: result.rank }]}
+          overlays={(layers.data?.earth_tiles ?? []).map((x) => ({ image: x.image, bounds: x.bounds }))}
+          selectedId={site.id}
+          maxFitZoom={analysis.body === 'moon' ? 11 : 9}
+          className="h-[320px]"
+        />
       </div>
 
       <Disclaimer text={analysis.disclaimer} />

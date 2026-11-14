@@ -1,0 +1,50 @@
+{
+  "_note": "Research candidate locations (descriptions from the project proposal). Contains NO measurements: terrain values come only from processed datasets. 'tiles' lists the connected elevation tiles for each site.",
+  "sites": [
+    {
+      "id": "atacama", "name": "Atacama Desert", "country": "Chile", "lat": -22.5, "lon": -68.5, "relevant_bodies": ["moon", "mars"],
+      "description": "One of the driest non-polar places on Earth. The connected tile spans the Calama basin, the Cordillera de la Sal near Valle de la Luna, and Andean volcanoes to the north-east.",
+      "terrain": ["Hyper-arid plains", "Salt-ridge badlands", "Volcanic edifices"],
+      "potential_comparison": "Selected arid and rocky Martian environments; slope and relief analogs for lunar terrain",
+      "applications": ["Dry-environment field studies", "Instrument testing", "Rover traverse rehearsal"],
+      "caution": "Aridity does not reproduce Mars's atmosphere, radiation or temperature; the Moon's environment differs even more.",
+      "tiles": ["s23w069"]
+    },
+    {
+      "id": "death_valley", "name": "Death Valley", "country": "United States (California)", "lat": 36.46, "lon": -116.87, "relevant_bodies": ["mars"],
+      "description": "Deep desert basin with salt pans, alluvial fans, dunes and steep surrounding ranges.",
+      "terrain": ["Basin floor and salt pans", "Alluvial fans", "Steep mountain fronts"],
+      "potential_comparison": "Selected rocky, arid Martian landscapes",
+      "applications": ["Rover navigation exercises", "Geological fieldwork"],
+      "caution": "Terrain varies strongly across the region; results depend on the exact analysis window.",
+      "tiles": [], "suggested_tile": "NASADEM n36w117"
+    },
+    {
+      "id": "meteor_crater", "name": "Meteor Crater", "country": "United States (Arizona)", "lat": 35.027, "lon": -111.022, "relevant_bodies": ["moon", "mars"],
+      "description": "Well-preserved simple impact crater about 1.2 km across on the Colorado Plateau.",
+      "terrain": ["Simple bowl-shaped crater", "Raised rim and ejecta blanket", "Surrounding flat plateau"],
+      "potential_comparison": "Impact-crater landforms on the Moon and Mars",
+      "applications": ["Crater morphology studies", "Crater navigation and rim traverses"],
+      "caution": "A terrestrial impact structure has a different erosion and geological history.",
+      "tiles": [], "suggested_tile": "NASADEM n35w112"
+    },
+    {
+      "id": "hawaii", "name": "Hawaiian volcanic fields", "country": "United States (Hawaiʻi)", "lat": 19.76, "lon": -155.45, "relevant_bodies": ["moon", "mars"],
+      "description": "Basaltic lava flows, cinder cones and tephra on the upper slopes of Mauna Kea and Mauna Loa.",
+      "terrain": ["Basaltic lava flows", "Cinder cones", "Tephra and fine volcanic ash"],
+      "potential_comparison": "Basaltic lunar and Martian terrains",
+      "applications": ["Volcanic geology", "Rover mobility research"],
+      "caution": "Basalt alone does not establish full material equivalence.",
+      "tiles": [], "suggested_tile": "NASADEM n19w156"
+    },
+    {
+      "id": "iceland", "name": "Icelandic volcanic landscapes", "country": "Iceland", "lat": 65.05, "lon": -16.75, "relevant_bodies": ["moon", "mars"],
+      "description": "Young lava fields and volcanic sand plains in the highlands north of Vatnajökull.",
+      "terrain": ["Young lava fields", "Volcanic sand plains", "Hyaloclastite ridges"],
+      "potential_comparison": "Selected basaltic and volcanic terrains",
+      "applications": ["Geological field studies", "Equipment testing"],
+      "caution": "Weather, vegetation, ice and seasonal conditions differ markedly.",
+      "tiles": [], "suggested_tile": "ArcticDEM or Copernicus DEM (NASADEM stops at 60° N)"
+    }
+  ]
+}

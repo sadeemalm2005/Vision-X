@@ -19,8 +19,34 @@ The project aims to help researchers and space enthusiasts discover potential Ea
 
 Earth cannot fully reproduce the environmental conditions of the Moon or Mars. Earth2Moon compares selected terrain characteristics and identifies potential analog sites; it never claims that these locations are exact planetary equivalents.
 
-> **Status: Phase 1 (interface and engine) complete. Project datasets not yet connected.**
-> Every terrain measurement in the app is a **synthetic demonstration value**, labelled as such in the API (`provenance: "synthetic_demo"`) and the UI (amber *Demo* badges). Region names, coordinates and planetary imagery are real; the numbers compared are not. Do not cite any result.
+> **Status: running on real NASA elevation data.**
+> Every terrain measurement is computed by the project's pipeline from three datasets:
+> **LOLA** lunar south-pole DEM (40 m), **MOLA MEGDR** global Mars topography (1.85 km) and one **NASADEM** tile in the Atacama Desert (30 m).
+> Scores are research-discovery indicators, not validated findings: weights and tolerances are prototype values awaiting calibration.
+
+## 📦 Data in use
+
+| Body | Dataset | File | Resolution | Coverage |
+|---|---|---|---|---|
+| Moon | LRO LOLA gridded DEM (PDS Geosciences) | `ldem_85s_40m_float.img/.lbl` | 40 m | South pole, 85°S–90°S |
+| Mars | MGS MOLA MEGDR (PDS Geosciences) | `megt90n000fb.img/.xml` | 32 px/deg ≈ 1.85 km | Global |
+| Earth | NASADEM_HGT v001 (NASA Earthdata) | `s23w069.hgt` | 1″ ≈ 30 m | 23°S–22°S, 69°W–68°W (Atacama) |
+
+**Targets.** Moon: Shackleton crater interior, the south pole on Shackleton's rim, and two windows picked automatically from the DEM (lowest-slope plain, highest-relief massif). Mars: the Curiosity, Perseverance and Opportunity landing sites.
+
+**Earth search.** The Atacama tile is cut into overlapping analysis windows and every window is scored. That gives 399 windows of 10 km for lunar comparisons and 72 windows of 30 km for Mars comparisons; results appear as a heatmap.
+
+**Scale harmonization.** Each comparison runs on one shared grid:
+- **Moon vs Earth:** LOLA 40 m against NASADEM resampled to 40 m.
+- **Mars vs Earth:** MOLA 1.85 km against NASADEM area-averaged to 1.85 km. Mars comparisons are therefore **regional**: slopes describe landforms, not rover-scale ground. Roughness is unavailable for Mars, and confidence is capped at medium.
+
+**Not available yet** (shown with the reason in the app):
+- **Crater morphology:** needs a crater-detection step.
+- **Rocks:** need sub-metre imagery.
+- **Geology:** needs geological maps.
+- **Regolith proxies:** need material or spectral data.
+
+Because of this, the crater-navigation and geological-research missions are locked. Death Valley, Meteor Crater, Hawaii and Iceland have no elevation tile yet, so they are not scored.
 
 ---
 
@@ -44,11 +70,18 @@ npm run dev
 
 Open http://localhost:5173. API docs are at http://127.0.0.1:8000/docs.
 
+The processed features (`backend/app/data/processed/nasa_features.json`) and hillshades (`frontend/public/terrain/`) are committed, so the site runs without the raw data. To **rebuild** them from the raw datasets (not in git; about 375 MB):
+
+```bash
+# unzip NASA-DATA.zip into backend/data/raw/ (and unzip the NASADEM tile inside earth/), then:
+cd backend && python -m app.pipeline.build --raw data/raw/NASA-DATA    # ~10 s
+```
+
 ### Tests
 
 ```bash
-cd backend  && python -m pytest          # 41 tests: scoring engine + API
-cd frontend && npx vitest run            # weight-normalization preview
+cd backend  && python -m pytest          # 57 tests: terrain math, readers, scoring engine, API on real data
+cd frontend && npx vitest run            # weight preview + polar projection
 cd frontend && npm run build             # type-check + production build
 ```
 
@@ -83,11 +116,15 @@ backend/                      Python · FastAPI
     similarity.py             S = 100·Σ wᵢ sᵢ, coverage, withholding, conservative ranking
     explain.py                template explanations built only from computed values
     bodies.py                 environmental differences + mandatory disclaimer
-  app/providers/              DATA LAYER: where datasets connect
-    base.py                   DataProvider interface (format-agnostic)
-    demo.py                   DemoDataProvider (synthetic values, clearly labelled)
-    registry.py               selects provider via EARTH2MOON_DATA_PROVIDER
-  app/data/demo/*.json        demo targets, candidates, planned-dataset catalogue
+  app/pipeline/               OFFLINE DATA PROCESSING (NumPy)
+    readers.py                LOLA (PDS3), MOLA MEGDR (PDS4), NASADEM (HGT) readers + projections
+    terrain.py                relief, slope, roughness, variability, hillshade, resampling
+    build.py                  harmonize scales, cut Earth windows, write features + PNGs
+  app/providers/              DATA LAYER
+    base.py                   DataProvider interface
+    nasa.py                   serves the processed features
+  app/data/catalog/           datasets.json, sites.json (descriptions only, no numbers)
+  app/data/processed/         nasa_features.json (generated, committed)
   app/services/               orchestration: provider → engine → report
   app/api.py, main.py         HTTP routes, CORS, validation
 frontend/                     React 19 · TypeScript · Vite · Tailwind v4
@@ -121,23 +158,19 @@ frontend/                     React 19 · TypeScript · Vite · Tailwind v4
    - coverage is below 60%
    - a mission-required feature (craters for crater navigation, geology for geological research) cannot be compared
 6. **Conservative ranking:** sites are ranked by the **lower bound**, which treats missing weight as zero agreement. A data gap can therefore never lift a site above a fully measured one. The re-normalized score and its possible range are shown alongside.
-7. **Explanations** are deterministic templates over computed values. No language model generates numbers or claims.
+7. **Scale flag:** a feature compared above its recommended resolution (e.g. slope at 1.85 km) is scored but flagged as regional-scale, and the result's confidence is capped at medium.
+8. **Explanations** are deterministic templates over computed values. No language model generates numbers or claims.
 
 Mission weights, tolerances and kernels are **prototype values**. The rover profile reproduces the proposal's illustrative weights (30/30/15/15/10). They must be calibrated with sensitivity and ablation testing on real data.
 
 ---
 
-## Integrating the project datasets (Phase 2 → 4)
+## Adding more data
 
-The UI, API and engine do not need to change. Only the data provider does:
-
-1. Inspect the provided files (formats, CRS, resolution, variables).
-2. Create `backend/app/providers/<name>.py` implementing `DataProvider` (see `providers/base.py`). It must:
-   - return `TargetRegion` / `CandidateSite` objects whose `measurements` map feature ids (`engine/features.py`) to `Measurement(value, resolution_m, dataset_id, provenance)`
-   - optionally return `TerrainSummary` histograms and profiles computed from the DEMs
-3. Register it in `providers/registry.py` and set `EARTH2MOON_DATA_PROVIDER=<name>`.
-4. Update `datasets.json` statuses from `planned` to `connected`, and set `data_status="real"` on entities backed by data. The UI's demo badges then disappear automatically for those entities.
-5. Recalibrate tolerances and weights; run the validation plan (reference cases, feature checks, resolution, sensitivity, ablation, expert review).
+- **More Earth sites:** download the NASADEM tile (e.g. `n35w112` for Meteor Crater, `n36w117` for Death Valley, `n19w156` for Hawaii). Extend `build_earth` in `app/pipeline/build.py` to loop over tiles, add the tile id to the site in `catalog/sites.json`, and rebuild.
+- **Rover-scale Mars:** a HiRISE DTM (~1 m) for a target would allow 40 m comparisons like the Moon's.
+- **Geology / craters / rocks:** geological maps, a crater-detection step, or sub-metre imagery unlock the locked features and missions.
+- Then recalibrate tolerances and weights and run the validation plan (reference cases, sensitivity, ablation, expert review).
 
 ---
 
@@ -156,8 +189,7 @@ The free tier sleeps after 15 minutes without visitors; the first visit after th
 
 | Variable | Where | Default | Purpose |
 |---|---|---|---|
-| `EARTH2MOON_DATA_PROVIDER` | backend | `demo` | Which data provider serves measurements |
-| `EARTH2MOON_DATA_DIR` | backend | `./data` | Root folder for real datasets (used by future providers) |
+| `EARTH2MOON_DATA_PROVIDER` | backend | `nasa` | Which data provider serves measurements |
 | `EARTH2MOON_CORS_ORIGINS` | backend | `http://localhost:5173,…` | Allowed browser origins |
 | `VITE_API_BASE_URL` | frontend build | *(same origin)* | Absolute API URL when hosted separately |
 | `VITE_API_PROXY` | frontend dev | `http://127.0.0.1:8000` | Dev-server proxy target |

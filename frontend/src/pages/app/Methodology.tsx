@@ -1,5 +1,6 @@
 import { ExternalLink, FileCode2 } from 'lucide-react'
-import { Badge, DemoNotice, ErrorState, LoadingBlock, PageHeader, Panel, PanelHeader, Term } from '../../components/ui'
+import { Database } from 'lucide-react'
+import { Badge, ErrorState, LoadingBlock, PageHeader, Panel, PanelHeader, Term } from '../../components/ui'
 import { api } from '../../lib/api'
 import { useFeatureCatalog, useMissions } from '../../lib/catalog'
 import { formatResolution, pct } from '../../lib/format'
@@ -7,9 +8,9 @@ import type { Dataset } from '../../lib/types'
 import { useApi } from '../../lib/useApi'
 
 const PIPELINE = [
-  { title: 'Ingest', text: 'Load planetary and Earth inputs, read metadata (instrument, resolution, acquisition, processing level).', status: 'Awaiting datasets' },
-  { title: 'Harmonize', text: 'Reproject, align extents, convert units, mask missing values, resample to a common effective scale.', status: 'Awaiting datasets' },
-  { title: 'Extract', text: 'Derive relief, slope, roughness, slope variability and crater metrics from DEMs; geology from maps.', status: 'Awaiting datasets' },
+  { title: 'Ingest', text: 'Read LOLA (PDS3, float32 km), MOLA MEGDR (PDS4, int16 m) and NASADEM (HGT, int16 m) using their label metadata.', status: 'Implemented' },
+  { title: 'Harmonize', text: 'Convert to metres on metric grids; resample Earth to 40 m for the Moon and area-average to 1.85 km for Mars.', status: 'Implemented' },
+  { title: 'Extract', text: 'Per window: relief, mean slope, slope variability and roughness. Craters, rocks and geology need further data.', status: 'Partly implemented' },
   { title: 'Compare', text: 'Per-feature similarity with resolution checks, mission weights, coverage and required-feature rules.', status: 'Implemented' },
   { title: 'Explain', text: 'Rank conservatively, report contributions, strengths, differences, gaps and environmental limits.', status: 'Implemented' },
 ]
@@ -29,11 +30,37 @@ export default function Methodology() {
         title="How Earth2Moon compares terrain"
         description="The planned data sources, the processing pipeline and the exact scoring rules. The comparison engine is implemented and tested; data ingestion will be built around the project datasets once they are provided."
       />
-      <DemoNotice>
-        <strong className="font-semibold text-warn">Integration status.</strong> No planetary or Earth dataset is processed yet. Measurements shown
-        across the platform are synthetic placeholders, each tagged with the dataset it is planned to come from. Nominal resolutions below are
-        published product specifications, to be confirmed against the provided files.
-      </DemoNotice>
+      <div className="flex items-start gap-3 rounded-xl border border-good/25 bg-good/[0.05] px-4 py-3 text-[13px] leading-relaxed text-muted">
+        <Database aria-hidden className="mt-0.5 size-4 shrink-0 text-good" />
+        <p>
+          <strong className="font-semibold text-good">Connected data.</strong> All measurements are computed from three NASA elevation products: the LOLA
+          south-pole DEM (40 m), MOLA global topography (1.85 km) and one NASADEM tile in the Atacama Desert (30 m).
+          {meta.data?.generated_at && <> Features last built {new Date(meta.data.generated_at).toLocaleDateString()} (pipeline v{meta.data.pipeline_version}).</>}
+        </p>
+      </div>
+
+      {/* scale profiles */}
+      <Panel>
+        <PanelHeader eyebrow="Scale harmonization" title="Every comparison runs at one shared scale" />
+        <div className="grid gap-px bg-line md:grid-cols-2">
+          {(meta.data?.profiles ?? []).map((p) => (
+            <div key={p.id} className="bg-surface p-5">
+              <p className="font-display text-[16px] font-semibold">{p.name}</p>
+              <p className="mt-1 text-[13px] text-muted">{p.description}</p>
+              <dl className="num mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-muted">
+                <div><dt className="inline text-faint">grid </dt><dd className="inline">{Math.round(p.grid_m)} m</dd></div>
+                <div><dt className="inline text-faint">window </dt><dd className="inline">{p.window_m / 1000} km</dd></div>
+                <div><dt className="inline text-faint">Earth stride </dt><dd className="inline">{(p.stride_m / 1000).toFixed(1)} km</dd></div>
+                <div><dt className="inline text-faint">Earth windows </dt><dd className="inline">{meta.data?.counts.patches[p.id] ?? '—'}</dd></div>
+              </dl>
+            </div>
+          ))}
+        </div>
+        <p className="border-t border-line px-5 py-3 text-[12px] leading-relaxed text-faint">
+          The finer dataset is always brought to the coarser one&apos;s grid before features are computed, so slope and roughness mean the same
+          thing on both sides. Mars comparisons are therefore regional: 1.85 km pixels cannot describe rover-scale ground.
+        </p>
+      </Panel>
 
       {/* pipeline */}
       <Panel>
@@ -54,7 +81,7 @@ export default function Methodology() {
 
       {/* datasets */}
       <Panel>
-        <PanelHeader eyebrow="Data sources" title="Planned datasets" />
+        <PanelHeader eyebrow="Data sources" title="Connected and planned datasets" />
         {datasets.error ? (
           <div className="p-5"><ErrorState error={datasets.error} onRetry={datasets.reload} /></div>
         ) : !datasets.data ? (
@@ -132,7 +159,11 @@ export default function Methodology() {
                     <dt className="inline text-faint">needs ≤ </dt>
                     <dd className="inline">{f.max_effective_resolution_m !== null ? formatResolution(f.max_effective_resolution_m) : 'map / sample data'}</dd>
                   </div>
+                  {f.recommended_resolution_m !== null && (
+                    <div><dt className="inline text-faint">full meaning ≤ </dt><dd className="inline">{formatResolution(f.recommended_resolution_m)}</dd></div>
+                  )}
                 </dl>
+                {f.requirement && <p className="text-[12px] text-warn/90">Not available yet: {f.requirement}</p>}
               </li>
             ))}
           </ul>
@@ -191,26 +222,26 @@ export default function Methodology() {
 
       {/* integration */}
       <Panel>
-        <PanelHeader eyebrow="Integration" title="Where the project datasets connect" />
+        <PanelHeader eyebrow="Integration" title="How data enters the platform" />
         <div className="grid gap-6 p-5 lg:grid-cols-[1fr_1.1fr]">
           <div className="flex flex-col gap-3 text-[13.5px] leading-relaxed text-muted">
             <p>
-              Every page reads data through one backend interface, the <span className="num text-ink">DataProvider</span>. The interface does not assume any
-              file format, projection or variable name. Once the datasets are provided, a new provider will translate them into per-feature
-              measurements, and the website, engine and reports keep working unchanged.
+              Raw files are processed offline by <span className="num text-ink">python -m app.pipeline.build</span>, which writes per-window features and
+              hillshades. The API serves them through one interface, the <span className="num text-ink">DataProvider</span>, so the engine and website never
+              read raw files.
             </p>
-            <p>Switching providers is a configuration change: <span className="num text-ink">EARTH2MOON_DATA_PROVIDER</span>.</p>
-            <p>Validation will then follow the proposal: reference-case, feature, resolution, sensitivity and ablation testing, plus expert review.</p>
+            <p>Adding an Earth site means adding its NASADEM tile to the pipeline and rebuilding; nothing in the interface changes.</p>
+            <p>Next: validation as the proposal describes (reference cases, sensitivity and ablation testing, expert review).</p>
           </div>
           <pre className="overflow-x-auto rounded-xl border border-line bg-void p-4 font-mono text-[12px] leading-relaxed text-muted">
             <span className="flex items-center gap-2 pb-2 text-faint"><FileCode2 aria-hidden className="size-3.5" /> backend/app/providers/base.py</span>
 {`class DataProvider(Protocol):
     def list_targets(self, body) -> list[TargetRegion]
-    def list_candidates(self) -> list[CandidateSite]
+    def list_patches(self, scale_profile) -> list[EarthPatch]
     def get_terrain_summary(self, id) -> TerrainSummary
     def list_datasets(self) -> list[Dataset]
 
-# TargetRegion / CandidateSite carry
+# TargetRegion / EarthPatch carry
 #   measurements: {feature_id: Measurement(
 #       value, resolution_m, dataset_id, provenance)}`}
           </pre>

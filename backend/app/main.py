@@ -16,7 +16,7 @@ from .config import settings
 app = FastAPI(
     title="Earth2Moon API",
     version="0.1.0",
-    description="Terrain-similarity engine for planetary analog site discovery. Currently serving SYNTHETIC demonstration data.",
+    description="Terrain-similarity engine for planetary analog site discovery, serving features computed from LOLA, MOLA and NASADEM elevation data.",
 )
 app.add_middleware(
     CORSMiddleware,

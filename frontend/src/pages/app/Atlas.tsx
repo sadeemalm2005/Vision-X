@@ -1,52 +1,55 @@
 import clsx from 'clsx'
-import { Compass, Search } from 'lucide-react'
+import { CircleSlash, Compass, Database, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { EarthMap } from '../../components/map/EarthMap'
-import { Badge, ButtonLink, DemoBadge, ErrorState, PageHeader, Panel, Skeleton } from '../../components/ui'
+import { Badge, ButtonLink, ErrorState, PageHeader, Panel, Skeleton } from '../../components/ui'
 import { api } from '../../lib/api'
-import { useFeatureCatalog } from '../../lib/catalog'
-import { BODY_COLOR, formatCoord, formatValue } from '../../lib/format'
+import { BODY_COLOR, formatCoord } from '../../lib/format'
 import type { Body } from '../../lib/types'
 import { useApi } from '../../lib/useApi'
 
-type Filter = 'all' | Body
+type Filter = 'all' | Body | 'data'
 
 export default function Atlas() {
-  const candidates = useApi('candidates', api.candidates)
-  const catalog = useFeatureCatalog()
+  const sites = useApi('sites', api.sites)
+  const layers = useApi('mapLayers', api.mapLayers)
+  const meta = useApi('meta', api.meta)
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (candidates.data ?? []).filter(
-      (c) => (filter === 'all' || c.relevant_bodies.includes(filter)) && (!q || `${c.name} ${c.country} ${c.terrain.join(' ')}`.toLowerCase().includes(q)),
+    return (sites.data ?? []).filter(
+      (c) =>
+        (filter === 'all' || (filter === 'data' ? c.data_status === 'real' : c.relevant_bodies.includes(filter))) &&
+        (!q || `${c.name} ${c.country} ${c.terrain.join(' ')}`.toLowerCase().includes(q)),
     )
-  }, [candidates.data, filter, query])
+  }, [sites.data, filter, query])
   const selected = list.find((c) => c.id === selectedId) ?? list[0]
+  const tiles = layers.data?.earth_tiles ?? []
 
   return (
     <div>
       <PageHeader
         eyebrow="Site Atlas"
         title="Earth candidate locations"
-        description="Research candidates from the project proposal. None is a pre-validated analog: suitability is only assessed against a specific target and mission in Explore & Compare."
+        description="Research candidates from the project proposal. A site can only be scored once an elevation tile for it is connected; none is a pre-validated analog."
         actions={<ButtonLink to="/app/explore"><Compass aria-hidden className="size-4" /> Compare against a target</ButtonLink>}
       />
-      {candidates.error && <ErrorState error={candidates.error} onRetry={candidates.reload} />}
+      {sites.error && <ErrorState error={sites.error} onRetry={sites.reload} />}
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex rounded-lg border border-line p-0.5" role="group" aria-label="Filter by planetary body">
-          {(['all', 'moon', 'mars'] as Filter[]).map((f) => (
+        <div className="flex flex-wrap rounded-lg border border-line p-0.5" role="group" aria-label="Filter sites">
+          {([['all', 'All sites'], ['data', 'With data'], ['moon', 'Moon analogs'], ['mars', 'Mars analogs']] as [Filter, string][]).map(([f, label]) => (
             <button
               key={f}
               type="button"
               onClick={() => setFilter(f)}
               aria-pressed={filter === f}
-              className={clsx('cursor-pointer rounded-md px-3 py-1.5 text-[13px] capitalize transition-colors', filter === f ? 'bg-raised text-ink' : 'text-muted hover:text-ink')}
+              className={clsx('cursor-pointer rounded-md px-3 py-1.5 text-[13px] transition-colors', filter === f ? 'bg-raised text-ink' : 'text-muted hover:text-ink')}
             >
-              {f === 'all' ? 'All sites' : `${f} analogs`}
+              {label}
             </button>
           ))}
         </div>
@@ -64,12 +67,13 @@ export default function Atlas() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="flex flex-col gap-4">
-          {candidates.loading ? (
+        <div className="flex min-w-0 flex-col gap-4">
+          {sites.loading ? (
             <Skeleton className="h-[460px]" />
           ) : (
             <EarthMap
-              sites={list.map((c) => ({ id: c.id, name: c.name, lat: c.lat, lon: c.lon, color: '#70B8FF' }))}
+              sites={list.map((c) => ({ id: c.id, name: c.name, lat: c.lat, lon: c.lon, color: c.data_status === 'real' ? '#6FD4A8' : '#9BAABC' }))}
+              overlays={tiles.map((t) => ({ image: t.image, bounds: t.bounds }))}
               selectedId={selected?.id}
               onSelect={setSelectedId}
               flyToSelection
@@ -85,7 +89,10 @@ export default function Atlas() {
                   aria-pressed={c.id === selected?.id}
                   className={clsx('w-full cursor-pointer rounded-xl border px-4 py-3 text-left transition-colors', c.id === selected?.id ? 'border-accent/50 bg-raised' : 'border-line bg-surface hover:border-line-strong')}
                 >
-                  <p className="text-[14px] font-medium">{c.name}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[14px] font-medium">{c.name}</p>
+                    {c.data_status === 'real' ? <Badge tone="good">Data</Badge> : <Badge>No data</Badge>}
+                  </div>
                   <p className="text-[12px] text-muted">{c.country}</p>
                   <div className="mt-2 flex gap-1.5">
                     {c.relevant_bodies.map((b) => <span key={b} className="size-2 rounded-full" style={{ background: BODY_COLOR[b] }} title={`${b} analog candidate`} />)}
@@ -93,7 +100,7 @@ export default function Atlas() {
                 </button>
               </li>
             ))}
-            {!candidates.loading && list.length === 0 && <li className="text-[13px] text-muted">No sites match the current filter.</li>}
+            {!sites.loading && list.length === 0 && <li className="text-[13px] text-muted">No sites match the current filter.</li>}
           </ul>
         </div>
 
@@ -105,7 +112,7 @@ export default function Atlas() {
                   <h2 className="text-[20px] font-semibold">{selected.name}</h2>
                   <p className="text-[13px] text-muted">{selected.country}</p>
                 </div>
-                <Badge tone="neutral">Candidate</Badge>
+                {selected.data_status === 'real' ? <Badge tone="good">Elevation data</Badge> : <Badge>No data yet</Badge>}
               </div>
               <p className="num mt-2 text-[12px] text-faint">{formatCoord(selected.lat, selected.lon)}</p>
             </div>
@@ -123,18 +130,19 @@ export default function Atlas() {
                 <p className="eyebrow mb-2">Research applications</p>
                 <div className="flex flex-wrap gap-1.5">{selected.applications.map((t) => <Badge key={t} tone="accent">{t}</Badge>)}</div>
               </div>
-              <div>
-                <p className="eyebrow mb-2 flex items-center justify-between">Summary measurements <DemoBadge label="Demo" /></p>
-                <dl className="divide-y divide-line rounded-lg border border-line">
-                  {Object.entries(selected.measurements).map(([fid, m]) => (
-                    <div key={fid} className="flex items-center justify-between gap-3 px-3 py-2 text-[12.5px]">
-                      <dt className="text-muted">{catalog.byId[fid]?.name ?? fid}</dt>
-                      <dd className="num">{formatValue(m.value, catalog.byId[fid])}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-              <p className="text-[12.5px] text-muted"><span className="text-ink">Data quality: </span>{selected.data_quality}</p>
+              {selected.data_status === 'real' ? (
+                <div className="rounded-lg border border-good/25 bg-good/[0.05] px-3 py-2.5 text-[12.5px] text-muted">
+                  <p className="mb-1 flex items-center gap-1.5 font-medium text-good"><Database aria-hidden className="size-3.5" /> Connected: NASADEM {selected.tiles.join(', ')}</p>
+                  Searched as {meta.data?.counts.patches.lunar_fine ?? '…'} windows of 10 km for lunar comparisons and{' '}
+                  {meta.data?.counts.patches.mars_regional ?? '…'} windows of 30 km for Mars comparisons. The shaded relief on the map is rendered from this tile.
+                </div>
+              ) : (
+                <div className="rounded-lg border border-line bg-base/60 px-3 py-2.5 text-[12.5px] text-muted">
+                  <p className="mb-1 flex items-center gap-1.5 font-medium text-ink"><CircleSlash aria-hidden className="size-3.5" /> Not scored yet</p>
+                  No elevation data is connected for this site, so it is not part of any ranking.
+                  {selected.suggested_tile && <> Adding <span className="text-ink">{selected.suggested_tile}</span> to the pipeline would enable it.</>}
+                </div>
+              )}
               <p className="rounded-lg border border-mars/25 bg-mars/[0.06] px-3 py-2.5 text-[12.5px] text-mars/90"><span className="font-medium text-mars">Caution: </span>{selected.caution}</p>
             </div>
           </Panel>

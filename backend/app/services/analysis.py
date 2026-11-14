@@ -1,4 +1,10 @@
-"""Analysis orchestration: provider data -> engine -> serializable report."""
+"""Analysis orchestration: provider data -> engine -> serializable report.
+
+A target is compared with every Earth patch computed at the SAME scale profile
+(same grid spacing and window size). Full explained results are returned for
+the top ``top_n`` patches; a compact score list covers every patch so the map
+can draw a similarity heatmap.
+"""
 
 from __future__ import annotations
 
@@ -11,8 +17,10 @@ from ..engine.explain import explain
 from ..engine.features import FEATURES
 from ..engine.missions import get_mission
 from ..engine.similarity import MIN_COVERAGE, compare_feature, rank_key, resolve_weights, score_candidate
-from ..providers.base import CandidateSite, DataProvider, TargetRegion
-from .serializers import candidate_dict, target_dict
+from ..providers.base import DataProvider, TargetRegion
+from .serializers import patch_dict, target_dict
+
+DEFAULT_TOP_N = 10
 
 
 class AnalysisError(ValueError):
@@ -20,31 +28,23 @@ class AnalysisError(ValueError):
 
 
 def feature_availability(provider: DataProvider, target: TargetRegion) -> list[dict]:
-    """For each feature: can it be compared for this target against at least one candidate?"""
-    candidates = provider.list_candidates()
+    """For each feature: can it be compared for this target against at least one Earth patch?"""
+    patches = provider.list_patches(target.scale_profile)
     out = []
     for fid, spec in FEATURES.items():
         tm = target.measurements.get(fid)
-        comparable = 0
-        with_data = 0
-        reasons: set[str] = set()
-        for c in candidates:
-            cm = c.measurements.get(fid)
-            if cm is not None:
-                with_data += 1
-            r = compare_feature(fid, 1.0, tm, cm)
-            if r.status == "scored":
-                comparable += 1
-            else:
-                reasons.add(r.status)
+        statuses = [compare_feature(fid, 1.0, tm, p.measurements.get(fid)) for p in patches]
+        comparable = sum(1 for s in statuses if s.status == "scored")
+        with_data = sum(1 for p in patches if fid in p.measurements)
         if tm is None:
-            reason = "No measurement for this target in the connected data."
-        elif comparable == 0 and "insufficient_resolution" in reasons:
-            reason = "Earth inputs are too coarse for this feature."
+            reason = spec.requirement or "Not measured for this target in the connected datasets."
+        elif comparable == 0 and any(s.status == "insufficient_resolution" for s in statuses):
+            reason = f"Effective resolution is too coarse for this feature (needs ≤ {spec.max_effective_resolution_m:g} m)."
         elif comparable == 0:
-            reason = "No Earth candidate has this measurement."
+            reason = spec.requirement or "No Earth data for this feature."
         else:
             reason = None
+        scale_note = next((s.note for s in statuses if s.scale_limited), None)
         out.append(
             {
                 "feature_id": fid,
@@ -54,9 +54,9 @@ def feature_availability(provider: DataProvider, target: TargetRegion) -> list[d
                 "target_resolution_m": tm.resolution_m if tm else None,
                 "candidates_with_data": with_data,
                 "candidates_comparable": comparable,
-                "candidates_total": len(candidates),
+                "candidates_total": len(patches),
                 "reason": reason,
-                "spec_name": spec.name,
+                "scale_note": scale_note,
             }
         )
     return out
@@ -70,7 +70,7 @@ def run_analysis(
     mission_id: str,
     features: list[str],
     weights: dict[str, float] | None = None,
-    candidate_ids: list[str] | None = None,
+    top_n: int = DEFAULT_TOP_N,
 ) -> dict:
     target = provider.get_target(target_id)
     if target is None:
@@ -83,26 +83,22 @@ def run_analysis(
     except ValueError as exc:
         raise AnalysisError(str(exc)) from exc
 
-    candidates: list[CandidateSite] = provider.list_candidates()
-    if candidate_ids:
-        wanted = set(candidate_ids)
-        candidates = [c for c in candidates if c.id in wanted]
-        if not candidates:
-            raise AnalysisError("None of the requested candidate sites exist")
+    patches = provider.list_patches(target.scale_profile)
+    if not patches:
+        raise AnalysisError("No Earth data has been processed at this target's scale")
+    profile = next(p for p in provider.list_profiles() if p.id == target.scale_profile)
 
-    scored = []
-    for c in candidates:
-        res = score_candidate(norm, target.measurements, c.measurements, required=mission.required)
-        scored.append((c, res))
+    scored = [(p, score_candidate(norm, target.measurements, p.measurements, required=mission.required)) for p in patches]
     scored.sort(key=lambda pair: rank_key(pair[1]))
 
     results = []
-    for rank, (c, res) in enumerate(scored, start=1):
-        exp = explain(res, target.name, c.name)
+    for rank, (p, res) in enumerate(scored[:top_n], start=1):
+        site = provider.get_site(p.site_id)
+        exp = explain(res, target.name, p.name)
         results.append(
             {
                 "rank": rank,
-                "site": candidate_dict(c),
+                "site": patch_dict(p, site, profile.window_m),
                 "score": None if res.score is None else round(res.score, 1),
                 "withheld": res.withheld,
                 "withheld_reason": res.withheld_reason,
@@ -110,15 +106,27 @@ def run_analysis(
                 "lower_bound": round(res.lower_bound, 1),
                 "upper_bound": round(res.upper_bound, 1),
                 "confidence": res.confidence,
+                "scale_limited": res.scale_limited,
                 "features": [asdict(f) for f in res.features],
                 "explanation": asdict(exp),
             }
         )
 
-    used = sorted(
-        {m.dataset_id for m in target.measurements.values()}
-        | {m.dataset_id for c in candidates for m in c.measurements.values()}
-    )
+    all_scores = [
+        {
+            "id": p.id,
+            "rank": i,
+            "lat": p.lat,
+            "lon": p.lon,
+            "bounds": [list(p.bounds[0]), list(p.bounds[1])],
+            "score": None if r.score is None else round(r.score, 1),
+            "lower_bound": round(r.lower_bound, 1),
+        }
+        for i, (p, r) in enumerate(scored, start=1)
+    ]
+    n_withheld = sum(1 for _, r in scored if r.withheld)
+
+    used = sorted({m.dataset_id for m in target.measurements.values()} | {m.dataset_id for p in patches for m in p.measurements.values()})
     return {
         "id": uuid.uuid4().hex[:12],
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -128,10 +136,16 @@ def run_analysis(
         "target": target_dict(target),
         "mission": {"id": mission.id, "name": mission.name, "caveat": mission.caveat, "required": list(mission.required)},
         "weights": [
-            {"feature_id": fid, "weight": round(w, 6), "default_weight": mission.weights.get(fid)}
-            for fid, w in norm.items()
+            {"feature_id": fid, "weight": round(w, 6), "default_weight": mission.weights.get(fid)} for fid, w in norm.items()
         ],
         "results": results,
+        "search": {
+            "scale_profile": asdict(profile),
+            "patches_total": len(scored),
+            "patches_withheld": n_withheld,
+            "top_n": len(results),
+            "all": all_scores,
+        },
         "datasets_used": used,
         "environmental_differences": environmental_differences(body),
         "scoring": {
@@ -140,8 +154,8 @@ def run_analysis(
             "rule": (
                 "Weights are normalized over the selected features. Only features measured on both sides at an adequate "
                 "resolution are scored; the score is re-normalized over them and withheld if they carry less than "
-                f"{MIN_COVERAGE:.0%} of the weight, or if a mission-required feature is missing. Sites are ranked by "
-                "the conservative lower bound so missing data never moves a site up."
+                f"{MIN_COVERAGE:.0%} of the weight, or if a mission-required feature is missing. Patches are ranked by "
+                "the conservative lower bound so missing data never moves a patch up."
             ),
         },
         "disclaimer": DISCLAIMER,

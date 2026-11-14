@@ -65,6 +65,7 @@ class FeatureResult:
     target_dataset: str | None = None
     candidate_dataset: str | None = None
     note: str | None = None
+    scale_limited: bool = False
 
 
 @dataclass
@@ -77,6 +78,7 @@ class ScoreResult:
     upper_bound: float
     confidence: Literal["high", "medium", "low"]
     features: list[FeatureResult] = field(default_factory=list)
+    scale_limited: bool = False
 
 
 # --------------------------------------------------------------------------- weights
@@ -190,6 +192,10 @@ def compare_feature(
         return res
     res.similarity = feature_similarity(spec, target.value, candidate.value)
     res.contribution = 100.0 * weight * res.similarity
+    rec = spec.recommended_resolution_m
+    if rec is not None and eff is not None and eff > rec:
+        res.scale_limited = True
+        res.note = f"Compared at {eff:g} m: a regional-scale value, coarser than the {rec:g} m this feature needs for rover-scale meaning."
     return res
 
 
@@ -230,6 +236,10 @@ def score_candidate(
         reason = f"Required feature not comparable: {names}."
     withheld = reason is not None
     score = None if withheld or coverage == 0 else lower / coverage
+    confidence = confidence_from_coverage(coverage)
+    scale_limited = any(f.scale_limited for f in scored)
+    if scale_limited and confidence == "high":
+        confidence = "medium"  # regional-scale comparisons never earn high confidence
     return ScoreResult(
         score=score,
         withheld=withheld,
@@ -237,8 +247,9 @@ def score_candidate(
         coverage=coverage,
         lower_bound=lower,
         upper_bound=upper,
-        confidence=confidence_from_coverage(coverage),
+        confidence=confidence,
         features=features,
+        scale_limited=scale_limited,
     )
 
 

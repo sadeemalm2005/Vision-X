@@ -4,12 +4,15 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { RankingRanges } from '../../components/charts/Charts'
 import { EarthMap } from '../../components/map/EarthMap'
+import { PatchTerrain } from '../../components/TerrainImage'
 import { PlanetMap } from '../../components/map/PlanetMap'
 import { ConfidenceBadge, Disclaimer, ScoreDial } from '../../components/results/ResultParts'
 import { SaveButton } from '../../components/results/SaveButton'
-import { Badge, ButtonLink, DemoBadge, DemoNotice, EmptyState, Panel, PanelHeader, Term } from '../../components/ui'
+import { Badge, ButtonLink, DemoBadge, EmptyState, Panel, PanelHeader, Term } from '../../components/ui'
+import { api } from '../../lib/api'
+import { useApi } from '../../lib/useApi'
 import { featureName, useFeatureCatalog } from '../../lib/catalog'
-import { BODY_COLOR, BODY_LABEL, formatCoord, formatDate, pct, scoreColor } from '../../lib/format'
+import { BODY_COLOR, BODY_LABEL, formatCoord, formatDate, formatResolution, pct, scoreColor } from '../../lib/format'
 import { history, useHistory } from '../../lib/storage'
 import type { AnalysisResult } from '../../lib/types'
 
@@ -56,14 +59,22 @@ export default function Results() {
   const all = useHistory()
   const analysis = analysisId ? all.find((a) => a.id === analysisId) : all[0]
   const catalog = useFeatureCatalog()
+  const layers = useApi('mapLayers', api.mapLayers)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [split, setSplit] = useState(false)
+  const selectIfDetailed = (id: string) => {
+    if (analysis?.results.some((r) => r.site.id === id)) setSelectedId(id)
+  }
 
   const selected = analysis?.results.find((r) => r.site.id === (selectedId ?? analysis.results[0]?.site.id))
   const mapSites = useMemo(
-    () => analysis?.results.map((r) => ({ id: r.site.id, name: r.site.name, lat: r.site.lat, lon: r.site.lon, rank: r.rank, color: scoreColor(r.score), dimmed: r.withheld })) ?? [],
+    // Markers for the top 3 only: neighbouring windows overlap, so ten markers would stack.
+    () => analysis?.results.slice(0, 3).map((r) => ({ id: r.site.id, name: r.site.name, lat: r.site.lat, lon: r.site.lon, rank: r.rank, color: scoreColor(r.score), dimmed: r.withheld })) ?? [],
     [analysis],
   )
+  const heat = analysis?.search?.all ?? []
+  const fitAll = useMemo(() => heat.map((c) => ({ id: c.id, name: '', lat: c.lat, lon: c.lon })), [heat])
+  const overlays = (layers.data?.earth_tiles ?? []).map((t) => ({ image: t.image, bounds: t.bounds }))
 
   if (!analysis) {
     return (
@@ -80,9 +91,9 @@ export default function Results() {
     )
   }
 
-  const scored = analysis.results.filter((r) => r.score !== null)
-  const meanCoverage = analysis.results.reduce((a, r) => a + r.coverage, 0) / analysis.results.length
+  const search = analysis.search
   const top = analysis.results[0]
+  const scale = search.scale_profile
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,15 +120,13 @@ export default function Results() {
         </div>
       </header>
 
-      {analysis.data_mode === 'demo' && <DemoNotice />}
-
       {/* summary */}
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-line bg-line lg:grid-cols-4">
         {[
-          ['Top-ranked site', top.site.name, top.score !== null ? `${top.score.toFixed(0)} / 100` : 'score withheld'],
-          ['Sites scored', `${scored.length} of ${analysis.results.length}`, `${analysis.results.length - scored.length} withheld for missing data`],
-          [<Term key="c" term="coverage">Mean coverage</Term>, pct(meanCoverage), 'share of weight backed by data'],
-          ['Features compared', analysis.weights.map((w) => featureName(catalog.byId, w.feature_id, true)).join(' · '), analysis.target.region_type],
+          ['Best-matching window', top.score !== null ? `${top.score.toFixed(0)} / 100` : 'score withheld', top.site.name],
+          ['Earth windows searched', search.patches_total, `${search.patches_total - search.patches_withheld} scored · ${search.patches_withheld} withheld`],
+          [<Term key="c" term="effective resolution">Comparison scale</Term>, `${formatResolution(scale.grid_m)} grid`, `${scale.window_m / 1000} km windows · ${scale.name.toLowerCase()}`],
+          ['Features compared', analysis.weights.map((w) => featureName(catalog.byId, w.feature_id, true)).join(' · '), `Top coverage ${pct(top.coverage)}`],
         ].map(([k, v, h], i) => (
           <div key={i} className="min-w-0 bg-surface px-5 py-4">
             <p className="eyebrow">{k}</p>
@@ -132,7 +141,7 @@ export default function Results() {
         <Panel className="overflow-hidden">
           <PanelHeader
             eyebrow="Ranked candidates"
-            title={split ? 'Planetary target vs Earth candidate' : 'Candidate sites on Earth'}
+            title={split ? 'Planetary target vs Earth window' : 'Similarity across the Atacama tile'}
             action={
               <div className="flex rounded-lg border border-line p-0.5" role="group" aria-label="Map view">
                 <button type="button" onClick={() => setSplit(false)} aria-pressed={!split} className={clsx('flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs', !split ? 'bg-raised text-ink' : 'text-muted hover:text-ink')}>
@@ -153,7 +162,22 @@ export default function Results() {
             )}
             <div className="flex flex-col gap-2">
               {split && <p className="eyebrow px-1 text-earth">{selected?.site.name ?? 'Earth'}</p>}
-              <EarthMap sites={mapSites} selectedId={selected?.site.id} onSelect={setSelectedId} flyToSelection={split} className="h-[340px] sm:h-[420px]" />
+              <EarthMap
+                sites={mapSites}
+                heat={heat.map((c) => ({ id: c.id, bounds: c.bounds, score: c.score, rank: c.rank }))}
+                overlays={overlays}
+                fitTo={fitAll}
+                maxFitZoom={10}
+                selectedId={selected?.site.id}
+                onSelect={selectIfDetailed}
+                flyToSelection={split}
+                className="h-[340px] sm:h-[420px]"
+              />
+              {!split && (
+                <p className="px-1 text-[11.5px] text-muted">
+                  Each square is one {scale.window_m / 1000} km window, coloured by score (green ≥ 75, amber ≥ 50, red &lt; 50). Markers show the top 3; click a square from the top {search.top_n} to inspect it, or hover any square for its score.
+                </p>
+              )}
             </div>
           </div>
         </Panel>
@@ -169,10 +193,14 @@ export default function Results() {
               </div>
               <ScoreDial score={selected.score} size={84} />
             </div>
+            <div className="border-b border-line px-5 py-3">
+              <PatchTerrain site={selected.site} className="mx-auto max-w-[220px]" />
+            </div>
             <div className="flex flex-1 flex-col gap-4 px-5 py-4">
               <div className="flex flex-wrap gap-2">
                 <ConfidenceBadge confidence={selected.confidence} coverage={selected.coverage} />
                 {selected.score !== null && selected.coverage < 1 && <Badge>range {selected.lower_bound.toFixed(0)}–{selected.upper_bound.toFixed(0)}</Badge>}
+                {selected.scale_limited && <Badge tone="warn">Regional scale</Badge>}
               </div>
               <p className="text-[14px] leading-relaxed">{selected.explanation.headline}</p>
               <ul className="flex flex-col gap-2">
@@ -206,6 +234,7 @@ export default function Results() {
           <PanelHeader eyebrow="Ranking" title="Scores with uncertainty from missing data" />
           <div className="p-5">
             <RankingRanges results={analysis.results} selectedId={selected?.site.id} onSelect={setSelectedId} />
+            <p className="mt-3 text-[11.5px] text-faint">Top {search.top_n} of {search.patches_total} windows.</p>
           </div>
         </Panel>
         <Panel>
@@ -218,7 +247,7 @@ export default function Results() {
 
       {/* ranked list */}
       <section aria-labelledby="ranked-title">
-        <h2 id="ranked-title" className="mb-4 text-[18px] font-semibold">All ranked candidates</h2>
+        <h2 id="ranked-title" className="mb-4 text-[18px] font-semibold">Top {search.top_n} Earth windows</h2>
         <ol className="flex flex-col gap-3">
           {analysis.results.map((r) => (
             <li key={r.site.id}>
@@ -259,7 +288,8 @@ export default function Results() {
           <div className="flex flex-col gap-3 text-[13px] leading-relaxed text-muted">
             <p>{analysis.scoring.rule}</p>
             <p>
-              Data sources referenced: <span className="num text-ink/80">{analysis.datasets_used.join(', ')}</span>. {analysis.data_mode === 'demo' && 'All values are synthetic placeholders labelled with their planned source.'}
+              Data: <span className="num text-ink/80">{analysis.datasets_used.join(', ')}</span>. {scale.description} Earth windows are searched with a{' '}
+              {scale.stride_m / 1000} km stride, so neighbouring windows overlap.
             </p>
             <p>Mission caveat: {analysis.mission.caveat}</p>
           </div>

@@ -50,10 +50,11 @@ export const STATUS_LABEL: Record<FeatureStatus, string> = {
   insufficient_resolution: 'Resolution too coarse',
 }
 
+// Confidence reflects data coverage AND scale (regional comparisons cap at medium).
 export const CONFIDENCE_LABEL: Record<Confidence, string> = {
-  high: 'High coverage',
-  medium: 'Partial coverage',
-  low: 'Low coverage',
+  high: 'High confidence',
+  medium: 'Medium confidence',
+  low: 'Low confidence',
 }
 
 /** Similarity 0..1 -> qualitative tone used across charts and badges. */

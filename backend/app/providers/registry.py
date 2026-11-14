@@ -6,12 +6,11 @@ from functools import lru_cache
 
 from ..config import settings
 from .base import DataProvider
-from .demo import DemoDataProvider
+from .nasa import NasaDataProvider
 
-# Register real providers here once implemented, e.g.
-#   "raster": lambda: RasterDataProvider(settings.data_dir),
+# Register alternative providers here, e.g. one reading a spatial database.
 _PROVIDERS = {
-    "demo": DemoDataProvider,
+    "nasa": NasaDataProvider,
 }
 
 

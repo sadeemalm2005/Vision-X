@@ -111,6 +111,11 @@ def explain(result: ScoreResult, target_name: str, site_name: str) -> Explanatio
         n = len(unavailable)
         noun, verb = ("feature", "is") if n == 1 else ("features", "are")
         parts.append(f"{n} selected {noun} could not be compared and {verb} excluded rather than counted as a match.")
+    if result.scale_limited:
+        parts.append(
+            "Slope-based features were compared at a regional scale, so they describe broad landforms rather than "
+            "rover-scale ground conditions; confidence is capped at medium."
+        )
     if result.score is not None and result.coverage < 1:
         parts.append(
             f"If the missing features were included the score could range from {result.lower_bound:.0f} to {result.upper_bound:.0f}."

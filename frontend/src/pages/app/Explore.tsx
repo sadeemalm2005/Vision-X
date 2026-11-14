@@ -1,10 +1,11 @@
 import clsx from 'clsx'
-import { Bot, Check, ChevronDown, CircleSlash, Info, Lock, Navigation, Pickaxe, RotateCcw, Sparkles, Truck, Upload } from 'lucide-react'
+import { Bot, Check, ChevronDown, CircleSlash, Database, Info, Lock, Navigation, Pickaxe, RotateCcw, Sparkles, Truck, Upload } from 'lucide-react'
+import { TargetTerrain } from '../../components/TerrainImage'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PlanetMap } from '../../components/map/PlanetMap'
 import { Planet } from '../../components/Planet'
-import { Badge, Button, DemoBadge, DemoNotice, ErrorState, LoadingBlock, PageHeader, Skeleton, Spinner, Term } from '../../components/ui'
+import { Badge, Button, ErrorState, LoadingBlock, PageHeader, Skeleton, Spinner, Term } from '../../components/ui'
 import { api } from '../../lib/api'
 import { useFeatureCatalog, useMissions } from '../../lib/catalog'
 import { BODY_COLOR, BODY_LABEL, formatCoord, formatResolution, formatValue, pct } from '../../lib/format'
@@ -20,7 +21,7 @@ const MISSION_ICON: Record<string, typeof Truck> = {
   astronaut_training: Bot,
 }
 
-const PIPELINE = ['Validating selection', 'Loading target and site measurements', 'Checking resolution compatibility', 'Scoring feature similarity', 'Ranking and writing explanations']
+const PIPELINE = ['Validating selection', 'Loading target and Earth-window measurements', 'Checking resolution compatibility', 'Scoring every Earth window', 'Ranking and writing explanations']
 
 /* ---------------------------------------------------------- step shell */
 
@@ -50,8 +51,8 @@ function Step({ n, title, description, done, active, children, id }: { n: number
 
 function BodyChoice({ body, selected, onSelect }: { body: Body; selected: boolean; onSelect: () => void }) {
   const copy = {
-    moon: { line: 'Mare plains, simple craters and highland boundaries.', g: '1.62 m/s²', src: 'LOLA · LROC' },
-    mars: { line: 'Crater floors, ancient deltas and layered plains.', g: '3.71 m/s²', src: 'MOLA · HiRISE' },
+    moon: { line: 'South pole: Shackleton crater, its rim, polar plains and massifs.', g: '1.62 m/s²', src: 'LOLA 40 m' },
+    mars: { line: 'Rover landing sites at Gale, Jezero and Meridiani.', g: '3.71 m/s²', src: 'MOLA 1.85 km' },
   }[body]
   return (
     <button
@@ -81,17 +82,20 @@ function BodyChoice({ body, selected, onSelect }: { body: Body; selected: boolea
 
 /* ---------------------------------------------------------- mission */
 
-function MissionChoice({ m, selected, onSelect, catalogName }: { m: MissionProfile; selected: boolean; onSelect: () => void; catalogName: (id: string) => string }) {
+function MissionChoice({ m, selected, onSelect, catalogName, blockedBy }: { m: MissionProfile; selected: boolean; onSelect: () => void; catalogName: (id: string) => string; blockedBy: string[] }) {
   const Icon = MISSION_ICON[m.id] ?? Sparkles
   const top = Object.entries(m.weights).sort((a, b) => b[1] - a[1])
+  const blocked = blockedBy.length > 0
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
+      disabled={blocked}
       className={clsx(
-        'flex h-full cursor-pointer flex-col rounded-xl border p-4 text-left transition-[border-color,background] duration-200',
-        selected ? 'border-accent/60 bg-accent/[0.06]' : 'border-line bg-base/50 hover:border-line-strong hover:bg-raised/50',
+        'flex h-full flex-col rounded-xl border p-4 text-left transition-[border-color,background] duration-200',
+        blocked ? 'cursor-not-allowed border-line bg-base/30 opacity-60' : 'cursor-pointer',
+        !blocked && (selected ? 'border-accent/60 bg-accent/[0.06]' : 'border-line bg-base/50 hover:border-line-strong hover:bg-raised/50'),
       )}
     >
       <div className="flex items-center justify-between">
@@ -116,6 +120,12 @@ function MissionChoice({ m, selected, onSelect, catalogName }: { m: MissionProfi
           </li>
         ))}
       </ul>
+      {blocked && (
+        <p className="mt-4 flex items-start gap-1.5 text-[11.5px] leading-snug text-warn/90">
+          <Lock aria-hidden className="mt-0.5 size-3 shrink-0" />
+          Needs {blockedBy.map(catalogName).join(', ').toLowerCase()}, which the connected datasets cannot provide yet.
+        </p>
+      )}
     </button>
   )
 }
@@ -172,6 +182,11 @@ export default function Explore() {
     if (!mission || !availability.data || userTouchedFeatures.current) return
     setFeatures(Object.keys(mission.weights).filter((fid) => availById[fid]?.available))
     setOverrides(null)
+  }, [mission, availability.data, availById])
+
+  // A mission whose required features have no data for this target cannot run.
+  useEffect(() => {
+    if (mission && availability.data && mission.required.some((r) => !availById[r]?.available)) setMissionId(null)
   }, [mission, availability.data, availById])
 
   // Drop selections that are not valid for the new target.
@@ -249,7 +264,7 @@ export default function Explore() {
       <PageHeader
         eyebrow="Explore & Compare"
         title="Find Earth analog sites"
-        description="Choose a planetary target and a mission. Earth2Moon compares the selected terrain features against every candidate site and ranks them, showing what matches and what does not."
+        description="Choose a planetary target and a mission. Earth2Moon compares the selected terrain features against every Earth analysis window at the same scale and ranks them, showing what matches and what does not."
       />
       {(catalog.error || missions.error) && <ErrorState className="mb-6" error={(catalog.error ?? missions.error)!} onRetry={() => { catalog.reload(); missions.reload() }} />}
 
@@ -264,7 +279,14 @@ export default function Explore() {
           </Step>
 
           {/* 2 ─ target */}
-          <Step id="step-target" n={2} title="Select a target region" description="Pick a region from the list or the map. Imagery is real NASA Trek mosaic; region measurements are demonstration values." done={!!targetId} active={!!body}>
+          <Step
+            id="step-target"
+            n={2}
+            title="Select a target region"
+            description={body === 'moon' ? 'Regions measured from the LOLA south-pole DEM (40 m). Each is a 10 km analysis window.' : 'Regions measured from MOLA global topography (1.85 km). Each is a 30 km analysis window: a regional-scale comparison.'}
+            done={!!targetId}
+            active={!!body}
+          >
             {targets.error ? (
               <ErrorState error={targets.error} onRetry={targets.reload} />
             ) : targets.loading || !targets.data ? (
@@ -290,10 +312,15 @@ export default function Explore() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-[14.5px] font-medium">{t.name}</p>
-                            {t.data_status === 'demo' ? <DemoBadge label="Demo" /> : <Badge tone="good">Data</Badge>}
+                            <Badge tone="good">NASA data</Badge>
                           </div>
                           <p className="mt-0.5 text-[12.5px] text-muted">{t.region_type} · <span className="num">{formatCoord(t.lat, t.lon)}</span></p>
-                          {sel && <p className="mt-2 text-[12.5px] leading-relaxed text-muted">{t.description}</p>}
+                          {sel && (
+                            <div className="mt-3 grid grid-cols-[96px_1fr] gap-3">
+                              <TargetTerrain target={t} caption={false} />
+                              <p className="text-[12.5px] leading-relaxed text-muted">{t.description}</p>
+                            </div>
+                          )}
                         </button>
                       </li>
                     )
@@ -301,8 +328,8 @@ export default function Explore() {
                   <li className="mt-1 flex items-start gap-3 rounded-xl border border-dashed border-line-strong px-4 py-3 text-[12.5px] leading-relaxed text-muted">
                     <Upload aria-hidden className="mt-0.5 size-4 shrink-0 text-faint" />
                     <span>
-                      <span className="text-ink">Custom datasets.</span> Uploading your own DEM or imagery will be enabled once the project
-                      data pipeline is connected; supported formats will be defined from the provided files.
+                      <span className="text-ink">More regions.</span> New targets and Earth tiles are added through the data pipeline
+                      (<span className="num">backend/app/pipeline</span>). Uploading files in the browser is not supported in this prototype.
                     </span>
                   </li>
                 </ul>
@@ -327,7 +354,14 @@ export default function Explore() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {missions.data?.map((m) => (
-                  <MissionChoice key={m.id} m={m} selected={m.id === missionId} onSelect={() => chooseMission(m.id)} catalogName={catalogName} />
+                  <MissionChoice
+                    key={m.id}
+                    m={m}
+                    selected={m.id === missionId}
+                    onSelect={() => chooseMission(m.id)}
+                    catalogName={catalogName}
+                    blockedBy={availability.data ? m.required.filter((r) => !availById[r]?.available) : []}
+                  />
                 ))}
               </div>
             )}
@@ -383,7 +417,8 @@ export default function Explore() {
                             <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{spec.description}</span>
                             {available ? (
                               <span className="num mt-1.5 block text-[11px] text-faint">
-                                target {formatValue(tm?.value, spec)} · {formatResolution(a.target_resolution_m)} · {a.candidates_comparable}/{a.candidates_total} sites comparable
+                                target {formatValue(tm?.value, spec)} · {formatResolution(a.target_resolution_m)} · {a.candidates_comparable}/{a.candidates_total} Earth windows comparable
+                                {a.scale_note && <span className="mt-0.5 block font-sans text-warn/80">Regional scale: describes broad landforms, not rover-scale ground.</span>}
                               </span>
                             ) : (
                               <span className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-warn/90">
@@ -526,10 +561,17 @@ export default function Explore() {
               )}
             </div>
           </div>
-          <DemoNotice className="mt-4">
-            <strong className="font-semibold text-warn">Demonstration data.</strong> The engine and ranking rules are real; the terrain values they
-            run on are synthetic placeholders until project datasets are connected.
-          </DemoNotice>
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-good/25 bg-good/[0.05] px-4 py-3 text-[12.5px] leading-relaxed text-muted">
+            <Database aria-hidden className="mt-0.5 size-4 shrink-0 text-good" />
+            <p>
+              <span className="font-medium text-good">Measured from NASA data.</span>{' '}
+              {body === 'mars'
+                ? 'Mars targets from MOLA are compared with the Atacama NASADEM tile averaged to the same 1.85 km grid.'
+                : body === 'moon'
+                  ? 'Lunar targets from LOLA are compared with the Atacama NASADEM tile resampled to the same 40 m grid.'
+                  : 'Every target is compared with Earth windows computed at the same scale.'}
+            </p>
+          </div>
         </aside>
       </div>
     </div>
