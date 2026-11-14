@@ -3,3 +3,6 @@ fastapi==0.162.7
 uvicorn[standard]==0.54.0
 pydantic==2.14.3
 numpy==2.5.4
+# AI summaries: Claude via the official SDK; OpenAI / Gemini via plain HTTP
+anthropic==2.8.0
+httpx==0.28.1

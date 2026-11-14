@@ -93,6 +93,9 @@ export const history = {
   remove(id: string) {
     write(HISTORY_KEY, JSON.stringify(history.all().filter((a) => a.id !== id)))
   },
+  update(id: string, fn: (a: AnalysisResult) => AnalysisResult) {
+    write(HISTORY_KEY, JSON.stringify(history.all().map((a) => (a.id === id ? fn(a) : a))))
+  },
   clear() {
     write(HISTORY_KEY, '[]')
   },

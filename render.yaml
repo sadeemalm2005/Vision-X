@@ -8,4 +8,9 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: EARTH2MOON_DATA_PROVIDER
-        value: demo
+        value: nasa
+      - key: EARTH2MOON_AI_DAILY_LIMIT
+        value: "200"
+      # Optional AI summaries: add ONE key in the Render dashboard (Environment tab),
+      # e.g. ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY (+ EARTH2MOON_AI_MODEL
+      # for OpenAI/Gemini). Without a key the site runs normally with AI summaries off.

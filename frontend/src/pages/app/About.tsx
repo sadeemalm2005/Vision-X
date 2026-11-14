@@ -21,6 +21,7 @@ const TECH = [
   ['Data pipeline', 'NumPy: reads PDS3/PDS4/HGT DEMs, harmonizes scales, computes features and hillshades'],
   ['Data layer', 'DataProvider interface serving precomputed features from LOLA, MOLA and NASADEM'],
   ['Machine learning', 'scikit-learn K-means (offline, k by silhouette); NumPy nearest-neighbour search and rank agreement at runtime'],
+  ['AI summaries', 'Claude (Anthropic SDK), OpenAI or Gemini behind one setting; every number checked against the data'],
   ['Persistence', 'Browser localStorage for history and saved sites (no accounts in the prototype)'],
 ]
 

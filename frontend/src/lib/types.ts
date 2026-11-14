@@ -234,6 +234,8 @@ export interface AnalysisResult {
   results: SiteResult[]
   search: { scale_profile: ScaleProfile; patches_total: number; patches_withheld: number; top_n: number; all: PatchScore[] }
   ml?: MLCrossCheck
+  /** AI-written summaries per Earth window, saved locally after generation. */
+  ai_summaries?: Record<string, AISummary>
   datasets_used: string[]
   environmental_differences: EnvironmentalDifference[]
   scoring: { formula: string; min_coverage: number; rule: string }
@@ -294,4 +296,20 @@ export interface MapLayers {
 export interface BodiesInfo {
   bodies: Record<string, Record<string, string | number>>
   differences: Record<Body, EnvironmentalDifference[]>
+}
+
+export interface AISummary {
+  summary: string
+  provider: string
+  model: string
+  verified: boolean
+  generated_at: string
+  cached: boolean
+}
+
+export interface AIStatus {
+  enabled: boolean
+  provider: string | null
+  model: string | null
+  reason: string | null
 }

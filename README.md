@@ -45,6 +45,13 @@ Earth cannot fully reproduce the environmental conditions of the Moon or Mars. E
 - **Nearest-neighbour search** (NumPy, at runtime). It ranks Earth windows by distance to the target in the same standardized space, with equal feature weights.
 - **Agreement.** Each analysis reports the top-10 overlap and the Spearman correlation between the two rankings. Rover-mobility tests gave ρ = 0.95–0.99 and 6–9 of 10 shared windows.
 
+**AI summaries (language model).** Each site report has a **Generate AI summary** button that writes a readable paragraph from the report's numbers.
+- **Facts recomputed on the server:** client data is never trusted.
+- **Every number checked:** a summary containing any number not in the data is rejected and not shown.
+- **Saved after generation:** results are cached on the server and saved in the browser, so repeat views cost nothing.
+- **Daily limit:** a cap, 200 per day by default, protects your API budget.
+- **Providers:** Claude, OpenAI or Gemini, chosen by setting. With no key set the button is hidden and the site works as before. Setup is under [Enabling AI summaries](#enabling-ai-summaries).
+
 **Not available yet** (shown with the reason in the app):
 - **Crater morphology:** needs a crater-detection step.
 - **Rocks:** need sub-metre imagery.
@@ -192,16 +199,33 @@ The `Dockerfile` builds the frontend and serves it from the FastAPI backend, so 
 
 The free tier sleeps after 15 minutes without visitors; the first visit after that takes about a minute to wake up. Each push to `main` redeploys automatically.
 
+## Enabling AI summaries
+
+Set **one** API key as an environment variable. Locally, set it in the terminal before starting the backend; on Render, add it under **Environment**. Never commit a key.
+
+| Provider | Key variable | Model |
+|---|---|---|
+| Claude (Anthropic) | `ANTHROPIC_API_KEY` | default `claude-opus-5-5`; set `EARTH2MOON_AI_MODEL=claude-haiku-5-5` for a much cheaper model |
+| OpenAI | `OPENAI_API_KEY` | **required:** `EARTH2MOON_AI_MODEL=<current OpenAI model name>` |
+| Gemini (Google AI Studio) | `GEMINI_API_KEY` | **required:** `EARTH2MOON_AI_MODEL=<current Gemini model name>` |
+
+If several keys are set, pick one with `EARTH2MOON_AI_PROVIDER=anthropic|openai|gemini`, or switch the feature off with `none`.
+
+**Claude settings:** the request uses `effort: low` and server-side refusal fallbacks. A report summary uses roughly 1–3 thousand tokens; check the provider's pricing page for current rates.
+
 ## Configuration
 
 | Variable | Where | Default | Purpose |
 |---|---|---|---|
 | `EARTH2MOON_DATA_PROVIDER` | backend | `nasa` | Which data provider serves measurements |
+| `EARTH2MOON_AI_PROVIDER` | backend | `auto` | `auto` (first key found), `anthropic`, `openai`, `gemini` or `none` |
+| `EARTH2MOON_AI_MODEL` | backend | Claude: `claude-opus-5-5` | Model name for the chosen provider |
+| `EARTH2MOON_AI_DAILY_LIMIT` | backend | `200` | Maximum new AI summaries per day (cache hits are free) |
 | `EARTH2MOON_CORS_ORIGINS` | backend | `http://localhost:5173,…` | Allowed browser origins |
 | `VITE_API_BASE_URL` | frontend build | *(same origin)* | Absolute API URL when hosted separately |
 | `VITE_API_PROXY` | frontend dev | `http://127.0.0.1:8000` | Dev-server proxy target |
 
-No API keys are needed. The tile services used (NASA Trek, NASA GIBS for the Earth texture, Esri, CARTO) are public. No secrets are stored in frontend code.
+No API keys are needed for the core site; one is needed only for AI summaries. The tile services used (NASA Trek, NASA GIBS for the Earth texture, Esri, CARTO) are public. No secrets are stored in frontend code.
 
 ## Credits
 

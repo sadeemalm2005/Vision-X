@@ -1,4 +1,5 @@
 import { ArrowLeft, BrainCircuit, CheckCircle2, Printer } from 'lucide-react'
+import { AISummaryPanel } from '../../components/results/AISummaryPanel'
 import { clusterColor } from '../../components/results/MLPanel'
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -89,6 +90,7 @@ export default function SiteReport() {
       <p className="max-w-4xl text-[16px] leading-relaxed text-ink/90">
         <span className="font-medium text-ink">{ex.headline}</span> {ex.summary}
       </p>
+      <AISummaryPanel analysis={analysis} result={result} />
       {result.scale_limited && (
         <p className="rounded-xl border border-warn/25 bg-warn/[0.06] px-4 py-3 text-[13px] leading-relaxed text-warn/90">
           <span className="font-semibold text-warn">Regional-scale comparison.</span> Both sides were compared on a{' '}

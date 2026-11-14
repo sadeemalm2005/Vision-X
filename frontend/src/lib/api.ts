@@ -1,4 +1,6 @@
 import type {
+  AIStatus,
+  AISummary,
   AnalysisResult,
   AnalyzeRequest,
   BodiesInfo,
@@ -60,5 +62,7 @@ export const api = {
   sites: () => request<Site[]>('/sites'),
   mapLayers: () => request<MapLayers>('/map-layers'),
   terrain: (id: string) => request<TerrainSummary>(`/terrain/${encodeURIComponent(id)}`),
+  aiStatus: () => request<AIStatus>('/ai/status'),
+  aiSummary: (req: AnalyzeRequest & { site_id: string }) => request<AISummary>('/ai/summary', { method: 'POST', body: JSON.stringify(req) }),
   analyze: (req: AnalyzeRequest) => request<AnalysisResult>('/analyze', { method: 'POST', body: JSON.stringify(req) }),
 }

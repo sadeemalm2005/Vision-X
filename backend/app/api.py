@@ -8,6 +8,10 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .ai.facts import build_facts
+from .ai.providers.base import ProviderError
+from .ai.service import AIDisabled, SummaryRejected
+from .ai.service import service as ai_service
 from .engine.bodies import BODIES, DISCLAIMER, environmental_differences
 from .engine.features import FEATURES
 from .engine.missions import MISSIONS
@@ -106,6 +110,38 @@ def terrain(entity_id: str, provider: DataProvider = Depends(get_provider)) -> d
     if s is None:
         raise HTTPException(404, f"No terrain summary for '{entity_id}'")
     return asdict(s)
+
+
+class SummaryRequest(AnalyzeRequest):
+    site_id: str = Field(min_length=1, max_length=96)
+
+
+@router.get("/ai/status")
+def ai_status() -> dict:
+    return asdict(ai_service.status())
+
+
+@router.post("/ai/summary")
+def ai_summary(req: SummaryRequest, provider: DataProvider = Depends(get_provider)) -> dict:
+    """AI-written summary for one Earth window. Facts are recomputed server-side."""
+    try:
+        analysis = run_analysis(
+            provider, body=req.body, target_id=req.target_id, mission_id=req.mission_id,
+            features=req.features, weights=req.weights, top_n=100_000,
+        )
+    except AnalysisError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    result = next((r for r in analysis["results"] if r["site"]["id"] == req.site_id), None)
+    if result is None:
+        raise HTTPException(404, f"Unknown Earth window '{req.site_id}' for this target")
+    try:
+        return ai_service.summarize(build_facts(analysis, result))
+    except AIDisabled as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except SummaryRejected as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except ProviderError as exc:
+        raise HTTPException(503 if exc.retryable else 502, str(exc)) from exc
 
 
 @router.post("/analyze")
