@@ -23,19 +23,29 @@ def _version(name: str) -> tuple[float, ...]:
     return (float(m.group(1)),) if m else (0.0,)
 
 
-def pick_model(models: list[dict]) -> str | None:
-    """Newest stable Gemini *flash* model that supports generateContent."""
+def rank_models(models: list[dict]) -> list[str]:
+    """Candidate models, best first: stable flash (newest first), then other flash, then the rest."""
     usable = [
         m["name"].removeprefix("models/")
         for m in models
         if "generateContent" in m.get("supportedGenerationMethods", []) and m.get("name", "").startswith("models/gemini")
     ]
-    stable_flash = [n for n in usable if "flash" in n and not any(t in n for t in _UNSTABLE)]
-    pool = stable_flash or [n for n in usable if "flash" in n] or usable
-    if not pool:
-        return None
-    # Prefer the highest version; among equals prefer the shortest (alias like "gemini-X-flash").
-    return sorted(pool, key=lambda n: (_version(n), -len(n)))[-1]
+    order = lambda n: (_version(n), -len(n))  # newest first; among equals the short alias first  # noqa: E731
+    stable_flash = sorted((n for n in usable if "flash" in n and not any(t in n for t in _UNSTABLE)), key=order, reverse=True)
+    other_flash = sorted((n for n in usable if "flash" in n and n not in stable_flash), key=order, reverse=True)
+    rest = sorted((n for n in usable if "flash" not in n), key=order, reverse=True)
+    return stable_flash + other_flash + rest
+
+
+def pick_model(models: list[dict]) -> str | None:
+    ranked = rank_models(models)
+    return ranked[0] if ranked else None
+
+
+# A listed model can still be unavailable to a key (e.g. a brand-new model overloaded
+# or not served on the free tier). These statuses mean "try the next candidate".
+_TRY_NEXT = {404, 429, 500, 503}
+MAX_CANDIDATES = 4
 
 
 class GeminiProvider:
@@ -46,9 +56,11 @@ class GeminiProvider:
         self._timeout = timeout_s
         if not self._key:
             raise ProviderError("GEMINI_API_KEY is not set.")
-        self.model = model or self._discover_model()
+        # An explicitly configured model is used as-is; otherwise try discovered candidates in order.
+        self._candidates = [model] if model else self._discover_models()
+        self.model = self._candidates[0]
 
-    def _discover_model(self) -> str:
+    def _discover_models(self) -> list[str]:
         try:
             r = httpx.get(f"{BASE}/models", headers={"x-goog-api-key": self._key}, params={"pageSize": 200}, timeout=self._timeout)
         except httpx.HTTPError as e:
@@ -57,30 +69,45 @@ class GeminiProvider:
             raise ProviderError("Gemini rejected the API key (check GEMINI_API_KEY).")
         if r.status_code >= 400:
             raise ProviderError(f"Gemini model list failed ({r.status_code}).", retryable=r.status_code >= 500)
-        model = pick_model(r.json().get("models", []))
-        if not model:
+        ranked = rank_models(r.json().get("models", []))
+        if not ranked:
             raise ProviderError("No Gemini text model is available for this key; set EARTH2MOON_AI_MODEL.")
-        return model
+        return ranked[:MAX_CANDIDATES]
+
+    def _post(self, model: str, system: str, user: str) -> httpx.Response:
+        return httpx.post(
+            f"{BASE}/models/{model}:generateContent",
+            headers={"x-goog-api-key": self._key},
+            json={
+                "systemInstruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": user}]}],
+            },
+            timeout=self._timeout,
+        )
 
     def generate(self, system: str, user: str) -> Generation:
-        try:
-            r = httpx.post(
-                f"{BASE}/models/{self.model}:generateContent",
-                headers={"x-goog-api-key": self._key},
-                json={
-                    "systemInstruction": {"parts": [{"text": system}]},
-                    "contents": [{"role": "user", "parts": [{"text": user}]}],
-                },
-                timeout=self._timeout,
-            )
-        except httpx.HTTPError as e:
-            raise ProviderError("Could not reach the Gemini API.", retryable=True) from e
-        if r.status_code in (401, 403):
-            raise ProviderError("Gemini rejected the API key.")
+        # Start with the model that last worked, then the remaining candidates.
+        order = [self.model] + [m for m in self._candidates if m != self.model]
+        r = None
+        for model in order:
+            try:
+                r = self._post(model, system, user)
+            except httpx.HTTPError as e:
+                raise ProviderError("Could not reach the Gemini API.", retryable=True) from e
+            if r.status_code in (401, 403):
+                raise ProviderError("Gemini rejected the API key.")
+            if r.status_code in _TRY_NEXT:
+                continue
+            self.model = model  # remember the model that answered
+            break
+        assert r is not None
         if r.status_code == 429:
             raise ProviderError("Gemini free-tier limit reached for now; try again in a minute.", retryable=True)
         if r.status_code >= 400:
-            raise ProviderError(f"Gemini API error ({r.status_code}).", retryable=r.status_code >= 500)
+            raise ProviderError(
+                f"Gemini is unavailable right now ({r.status_code}) for all {len(order)} candidate models; try again later.",
+                retryable=r.status_code >= 500,
+            )
         try:
             parts = r.json()["candidates"][0]["content"]["parts"]
             # Skip any "thought" parts some models return; keep the answer text.

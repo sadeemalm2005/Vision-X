@@ -65,6 +65,53 @@ def test_gemini_picks_newest_stable_flash_model():
     assert pick_model([]) is None
 
 
+def test_gemini_falls_back_to_next_model_when_newest_is_unavailable(monkeypatch):
+    import httpx
+
+    from app.ai.providers import gemini_provider as gp
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    listed = {"models": [
+        {"name": f"models/{n}", "supportedGenerationMethods": ["generateContent"]}
+        for n in ("gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.0-flash")
+    ]}
+    calls = []
+
+    def fake_get(url, **kw):
+        return httpx.Response(200, json=listed, request=httpx.Request("GET", url))
+
+    def fake_post(url, **kw):
+        calls.append(url)
+        req = httpx.Request("POST", url)
+        if "3.8" in url:
+            return httpx.Response(503, json={}, request=req)
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}, request=req)
+
+    monkeypatch.setattr(gp.httpx, "get", fake_get)
+    monkeypatch.setattr(gp.httpx, "post", fake_post)
+    p = gp.GeminiProvider(model=None)
+    g = p.generate("sys", "user")
+    assert g.model == "gemini-3.5-flash" and g.text == "ok"
+    assert p.model == "gemini-3.5-flash"  # remembered for next time
+    calls.clear()
+    p.generate("sys", "user")
+    assert len(calls) == 1 and "3.5" in calls[0]  # no retry of the failing model
+
+
+def test_gemini_reports_when_all_candidates_fail(monkeypatch):
+    import httpx
+
+    from app.ai.providers import gemini_provider as gp
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(gp.httpx, "get", lambda url, **kw: httpx.Response(200, json={"models": [
+        {"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"]}]}, request=httpx.Request("GET", url)))
+    monkeypatch.setattr(gp.httpx, "post", lambda url, **kw: httpx.Response(503, json={}, request=httpx.Request("POST", url)))
+    with pytest.raises(ProviderError) as e:
+        gp.GeminiProvider(model=None).generate("s", "u")
+    assert e.value.retryable and "unavailable" in str(e.value)
+
+
 def test_gemini_without_key_is_disabled(monkeypatch):
     from app.ai.providers.gemini_provider import GeminiProvider
 
